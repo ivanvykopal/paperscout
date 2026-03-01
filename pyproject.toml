@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paperscout"
+version = "0.1.0"
+description = "A multi-purpose tool for searching, downloading, and managing academic papers"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Ivan Vykopal", email = "ivan.vykopal@gmail.com"}
+]
+maintainers = [
+    {name = "Ivan Vykopal", email = "ivan.vykopal@gmail.com"}
+]
+keywords = [
+    "academic papers",
+    "research",
+    "arxiv",
+    "paper search",
+    "paper download",
+    "literature review"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "requests>=2.28.0",
+    "beautifulsoup4>=4.11.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+arxiv = ["arxivy>=0.2.0"]
+dblp = ["dblpcli>=0.1.0"]
+semantic_scholar = ["s2cli>=0.1.0"]
+acl_anthology = ["acl-anthology>=0.5.0"]
+all = [
+    "arxivy>=0.2.0",
+    "dblpcli>=0.1.0",
+    "s2cli>=0.1.0",
+    "acl-anthology>=0.5.0",
+]
+
+[project.scripts]
+paperscout = "paperscout.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/username/paperscout"
+Documentation = "https://github.com/username/paperscout#readme"
+Repository = "https://github.com/username/paperscout"
+Issues = "https://github.com/username/paperscout/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["paperscout*"]
+exclude = ["tests*", "benchmark*"]
+
+[tool.setuptools.package-data]
+paperscout = ["py.typed"]
