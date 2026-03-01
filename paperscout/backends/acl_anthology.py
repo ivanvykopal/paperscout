@@ -96,15 +96,22 @@ class ACLAnthologyBackend(BaseBackend):
 
             similarity = 0.0
 
-            # Check for exact or partial match in title
-            if query_lower in title_lower or title_lower in query_lower:
+            # Check for exact match first
+            if query_lower == title_lower:
                 similarity = 1.0
-            # Check for abstract keyword match
-            elif query_lower in abstract_lower:
-                similarity = 0.8
             else:
-                # Calculate title similarity for proximity matching
-                similarity = _title_similarity(query, paper_title)
+                query_tokens = set(query_lower.split())
+                title_tokens = set(title_lower.split())
+
+                if query_tokens == title_tokens:
+                    similarity = 1.0
+                elif query_tokens.issubset(title_tokens) and len(query_tokens) >= 2:
+                    similarity = 0.9
+                else:
+                    if query_lower in abstract_lower:
+                        similarity = 0.7
+                    else:
+                        similarity = _title_similarity(query, paper_title)
 
             if similarity > 0.0:  # Include all matches
                 matching_papers.append((paper, similarity))

@@ -14,7 +14,7 @@ from paperscout.backends.s2cli import SemanticScholarBackend
 from paperscout.backends.acl_anthology import ACLAnthologyBackend
 from paperscout.types import Paper
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __author__ = "Ivan Vykopal"
 __author_email__ = "ivan.vykopal@gmail.com"
 
