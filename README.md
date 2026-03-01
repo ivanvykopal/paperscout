@@ -10,7 +10,6 @@ A multi-purpose tool for searching, downloading, and managing academic papers.
 
 - **Search papers** across multiple sources using pluggable backends
 - **Download papers** by DOI or arXiv ID
-- **Extract metadata** including titles, authors, abstracts, and citations
 - **Programmatic API** and **CLI** interface
 - **Backend architecture** for easy addition of new sources
 - **Smart title matching** - searches across title and abstract
@@ -68,7 +67,6 @@ To add a new backend:
 | `search` | Search for papers across sources |
 | `match` | Get the best matching paper by title |
 | `download` | Download a paper |
-| `metadata` | Get paper metadata |
 
 ### Search Papers
 
@@ -117,19 +115,6 @@ paperscout download arXiv:2301.12345 --output ./papers
 
 # JSON output
 paperscout download arXiv:2301.12345 --json
-```
-
-### Get Metadata
-
-```bash
-# Get metadata by arXiv ID
-paperscout metadata arXiv:2301.12345
-
-# Get metadata by DOI
-paperscout metadata 10.1234/example.doi
-
-# JSON output
-paperscout metadata arXiv:2301.12345 --json
 ```
 
 ## Python API
