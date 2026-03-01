@@ -13,7 +13,6 @@ A multi-purpose tool for searching, downloading, and managing academic papers.
 - **Programmatic API** and **CLI** interface
 - **Backend architecture** for easy addition of new sources
 - **Smart title matching** - searches across title and abstract
-- **ACL Anthology priority** - prioritizes results from ACL Anthology when searching all sources
 
 ## Installation
 
