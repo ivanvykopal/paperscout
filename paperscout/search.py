@@ -2,7 +2,7 @@
 Paper search functionality using backend implementations.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 from paperscout.backends.arxiv import ArxivBackend
 from paperscout.backends.base import BaseBackend
@@ -10,6 +10,45 @@ from paperscout.backends.dblp import DblpBackend
 from paperscout.backends.s2cli import SemanticScholarBackend
 from paperscout.backends.acl_anthology import ACLAnthologyBackend
 from paperscout.similarity import _title_similarity
+from paperscout.types import Paper
+
+
+# Mapping of common shortcuts to their full names for query expansion
+SHORTCUTS = {
+    "llms": "large language models",
+    "llm": "large language model",
+    "nlp": "natural language processing",
+    "bert": "bidirectional encoder representations from transformers",
+    "gpt": "generative pre-trained transformer",
+    "rag": "retrieval-augmented generation",
+    "finetuning": "fine-tuning",
+    "pretraining": "pre-training",
+    "sft": "supervised fine-tuning",
+    "rlhf": "reinforcement learning with human feedback",
+    "rl": "reinforcement learning",
+    "fewshot": "few-shot learning",
+    "zeroshot": "zero-shot learning",
+}
+
+
+def _expand_shortcuts(query: str) -> str:
+    """Expand shortcuts in the query to their full names."""
+    words = query.split()
+    expanded_words = []
+
+    for word in words:
+        # Check if word (lowercase) is a shortcut
+        word_lower = word.lower().rstrip(",.;:")
+        if word_lower in SHORTCUTS:
+            # Preserve the original casing if it's a match
+            expansion = SHORTCUTS[word_lower]
+            # Keep any punctuation that was attached to the word
+            punctuation = word[len(word_lower):]
+            expanded_words.append(expansion + punctuation)
+        else:
+            expanded_words.append(word)
+
+    return " ".join(expanded_words)
 
 
 class PaperSearcher:
@@ -20,10 +59,10 @@ class PaperSearcher:
     """
 
     BACKENDS = {
+        "acl_anthology": ACLAnthologyBackend,
         "arxiv": ArxivBackend,
         "dblp": DblpBackend,
         "semantic_scholar": SemanticScholarBackend,
-        "acl_anthology": ACLAnthologyBackend,
     }
 
     def __init__(self):
@@ -37,7 +76,7 @@ class PaperSearcher:
         limit: int = 10,
         exact_match_first: bool = True,
         **kwargs,
-    ) -> List[Dict]:
+    ) -> List[Paper]:
         """
         Search for papers using the appropriate backend(s).
 
@@ -49,92 +88,124 @@ class PaperSearcher:
             limit: Maximum number of results to return.
             exact_match_first: If True, return exact title matches first,
                               then fall back to similar titles.
-            **kwargs: Additional source-specific parameters.
+            **kwargs: Backend-specific parameters.
 
         Returns:
-            List of paper search results as dictionaries, sorted by similarity.
+            List of Paper objects, sorted by similarity.
         """
+        expanded_query = _expand_shortcuts(query)
+
         if source == "all":
-            return self._search_all_backends(query, limit, exact_match_first, **kwargs)
+            return self._search_all_backends(query, expanded_query, limit, exact_match_first, **kwargs)
         else:
             backend = self._get_backend(source)
-            results = backend.search(query, limit, **kwargs)
-            # Add similarity scores for cross-backend consistency
-            for result in results:
-                result["_similarity"] = _title_similarity(query, result.get("title", ""))
-            return results
+            # Search with both queries and combine results, only if the queries are different
+            if expanded_query != query:
+                original_results = backend.search(query, limit=limit, **kwargs)
+                expanded_results = backend.search(expanded_query, limit=limit, **kwargs)
+                combined_results = self._combine_results(original_results, expanded_results)
+            else:
+                combined_results = backend.search(query, limit=limit, **kwargs)
+            
+            for result in combined_results:
+                new_similarity = _title_similarity(query, result.title)
+                if result.similarity is None or result.similarity < new_similarity:
+                    result.similarity = new_similarity
+            return combined_results
 
     def _search_all_backends(
         self,
         query: str,
+        expanded_query: str,
         limit: int,
         exact_match_first: bool,
         **kwargs,
-    ) -> List[Dict]:
+    ) -> List[Paper]:
         """
         Search across all backends and return best matches.
 
         Args:
-            query: Search query string.
+            query: Original search query string.
+            expanded_query: Query with shortcuts expanded.
             limit: Maximum number of results to return.
             exact_match_first: Prefer exact title matches.
             **kwargs: Backend-specific parameters.
 
         Returns:
-            List of results from all backends, sorted by similarity.
+            List of Paper objects from all backends, sorted by similarity.
         """
-        all_results: List[Dict] = []
+        all_results: List[Paper] = []
 
         for source_name, backend_class in self.BACKENDS.items():
             try:
                 backend = self._get_backend(source_name)
-                results = backend.search(query, limit=limit, **kwargs)
+                original_results = backend.search(query, limit=limit, **kwargs)
+                expanded_results = backend.search(expanded_query, limit=limit, **kwargs)
+                combined = self._combine_results(original_results, expanded_results)
 
-                for result in results:
-                    # Calculate similarity to the query
-                    similarity = _title_similarity(query, result.get("title", ""))
-                    result["_source"] = source_name
-                    result["_similarity"] = similarity
+                for result in combined:
+                    result.source = source_name
+                    new_similarity = _title_similarity(query, result.title)
+                    if result.similarity is None or result.similarity < new_similarity:
+                        result.similarity = new_similarity
                     all_results.append(result)
 
             except Exception as e:
-                # Continue with other backends even if one fails
                 continue
 
         if not all_results:
             return []
 
-        # Sort by: ACL Anthology first, then by similarity (highest first)
-        # ACL Anthology papers get a priority boost
-        def sort_key(x):
-            similarity = x.get("_similarity", 0)
-            source = x.get("_source", "")
-            # ACL Anthology papers come first, then sort by similarity
+        def sort_key(paper: Paper):
+            similarity = paper.similarity or 0
+            source = paper.source
             if source == "acl_anthology":
-                return (0, -similarity)  # 0 = highest priority
+                return (0, -similarity)
             else:
-                return (1, -similarity)  # 1 = lower priority
+                return (1, -similarity)
 
         all_results.sort(key=sort_key)
 
         # If exact match first is enabled, move exact matches to top
         if exact_match_first:
-            exact_matches = [
-                r for r in all_results if r.get("_similarity", 0) == 1.0
-            ]
-            similar_matches = [
-                r for r in all_results if r.get("_similarity", 0) < 1.0
-            ]
+            exact_matches = [r for r in all_results if (r.similarity or 0) == 1.0]
+            similar_matches = [r for r in all_results if (r.similarity or 0) < 1.0]
             all_results = exact_matches + similar_matches
 
-        # Remove internal fields and apply limit
-        results = []
-        for r in all_results[:limit]:
-            r.pop("_source", None)
-            r.pop("_similarity", None)
-            results.append(r)
+        # Apply limit
+        return all_results[:limit]
 
-        return results
+    def _combine_results(self, results1: List[Paper], results2: List[Paper]) -> List[Paper]:
+        """
+        Combine two result lists, keeping the highest similarity for duplicate papers.
+
+        Args:
+            results1: First list of Paper objects.
+            results2: Second list of Paper objects.
+
+        Returns:
+            Combined list of Paper objects with highest similarity per paper.
+        """
+        # Use paper identifier + title as the key for deduplication
+
+        combined = {}
+
+        for paper in results1:
+            key = (paper.identifier, paper.title.lower())
+            combined[key] = paper
+
+        for paper in results2:
+            key = (paper.identifier, paper.title.lower())
+            if key in combined:
+                # Keep the one with higher similarity (treat None as 0)
+                sim2 = paper.similarity if paper.similarity is not None else 0
+                sim1 = combined[key].similarity if combined[key].similarity is not None else 0
+                if sim2 > sim1:
+                    combined[key] = paper
+            else:
+                combined[key] = paper
+
+        return list(combined.values())
 
     def download(self, identifier: str, source: str = "arxiv", **kwargs) -> Dict:
         """

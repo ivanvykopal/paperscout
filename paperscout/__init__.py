@@ -12,6 +12,7 @@ from paperscout.backends.arxiv import ArxivBackend
 from paperscout.backends.dblp import DblpBackend
 from paperscout.backends.s2cli import SemanticScholarBackend
 from paperscout.backends.acl_anthology import ACLAnthologyBackend
+from paperscout.types import Paper
 
 __version__ = "0.1.0"
 __author__ = "Ivan Vykopal"
@@ -25,4 +26,5 @@ __all__ = [
     "DblpBackend",
     "SemanticScholarBackend",
     "ACLAnthologyBackend",
+    "Paper",
 ]

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from paperscout.backends.base import BaseBackend
 from arxivy.api.client import ArxivClient
+from paperscout.types import Paper
 
 try:
     import arxivy
@@ -49,7 +50,7 @@ class ArxivBackend(BaseBackend):
             category: Optional[str] = None,
             sort_by: Optional[str] = None,
             sort_order: Optional[str] = None,
-        ) -> List[Dict]:
+        ) -> List[Paper]:
         """
         Search for papers on arXiv.
 
@@ -61,7 +62,7 @@ class ArxivBackend(BaseBackend):
             sort_order: Optional sort order ('ascending' or 'descending').
 
         Returns:
-            List of paper search results as dictionaries.
+            List of Paper objects.
         """
         papers = self.client.search(
             query=query,
@@ -103,28 +104,29 @@ class ArxivBackend(BaseBackend):
             "authors": paper.authors,
         }
 
-    def _format_result(self, result: Any) -> Dict:
+    def _format_result(self, result: Any) -> Paper:
         """
-        Format arxivy result dictionary to standard format.
+        Format arxivy result to standard format.
 
         Args:
             result: Raw result from arxivy query.
 
         Returns:
-            Formatted result dictionary.
+            Paper object.
         """
-        return {
-            "title": result.title.strip(),
-            "authors": [author.name.strip() for author in result.authors],
-            "year": int(result.published.split("-")[0]) if result.published else None,
-            "abstract": result.summary.strip() if hasattr(result, 'summary') else "",
-            "source": "arxiv",
-            "identifier": result.arxiv_id,
-            "url": result.abstract_url if hasattr(result, 'abstract_url') else "",
-            "pdf_url": result.pdf_url if hasattr(result, 'pdf_url') else "",
-            "published": result.published,
-            "categories": result.categories if hasattr(result, 'categories') else [],
-        }
+        return Paper(
+            title=result.title.strip(),
+            authors=[author.name.strip() for author in result.authors],
+            year=int(result.published.split("-")[0]) if result.published else None,
+            abstract=result.summary.strip() if hasattr(result, 'summary') else "",
+            source="arxiv",
+            identifier=result.arxiv_id,
+            url=result.abstract_url if hasattr(result, 'abstract_url') else "",
+            pdf_url=result.pdf_url if hasattr(result, 'pdf_url') else "",
+            published=result.published,
+            categories=result.categories if hasattr(result, 'categories') else [],
+            similarity=None,
+        )
     
     def _download_file(self, url: str, identifier: str) -> Tuple[str, str]:
         """

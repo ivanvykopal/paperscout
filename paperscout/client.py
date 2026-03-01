@@ -2,7 +2,9 @@
 Main client for the Paper Finder package.
 """
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
+
+from paperscout.types import Paper
 
 
 class PaperFinderClient:
@@ -47,7 +49,7 @@ class PaperFinderClient:
         source: str = "arxiv",
         limit: int = 10,
         **kwargs,
-    ) -> Dict:
+    ) -> List[Paper]:
         """
         Search for academic papers.
 
@@ -58,7 +60,7 @@ class PaperFinderClient:
             **kwargs: Additional source-specific parameters.
 
         Returns:
-            List of paper search results.
+            List of Paper objects.
         """
         return self.searcher.search(query, source, limit, **kwargs)
 

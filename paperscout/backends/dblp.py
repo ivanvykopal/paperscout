@@ -4,10 +4,11 @@ DBLP backend using the dblpcli library.
 
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from paperscout.backends.base import BaseBackend
 from dblpcli.api.client import DBLPClient
+from paperscout.types import Paper
 
 try:
     import dblpcli
@@ -46,16 +47,16 @@ class DblpBackend(BaseBackend):
             self,
             query: str,
             limit: int = 10
-        ) -> List[Dict]:
+        ) -> List[Paper]:
         """
         Search for papers on DBLP.
 
         Args:
             query: Search query string.
             limit: Maximum number of results to return.
-            
+
         Returns:
-            List of paper search results as dictionaries.
+            List of Paper objects.
         """
         results = self.client.search_publications(
             query=query,
@@ -94,28 +95,29 @@ class DblpBackend(BaseBackend):
             "authors": paper.get("authors", []),
         }
 
-    def _format_result(self, result: Dict) -> Dict:
+    def _format_result(self, result: Dict) -> Paper:
         """
-        Format DBLP result dictionary to standard format.
+        Format DBLP result to standard format.
 
         Args:
             result: Raw result from DBLP query.
 
         Returns:
-            Formatted result dictionary.
+            Paper object.
         """
-        return {
-            "title": result.get("title", "").strip(),
-            "authors": [author.strip() for author in result.get("authors", [])],
-            "year": int(result.get("year", 0)) if result.get("year") else None,
-            "abstract": result.get("abstract", "").strip(),
-            "source": "dblp",
-            "identifier": result.get("key", ""),
-            "url": result.get("url", ""),
-            "pdf_url": result.get("pdf_url", ""),
-            "published": result.get("published", ""),
-            "categories": result.get("categories", []),
-        }
+        return Paper(
+            title=result.get("title", "").strip(),
+            authors=[author.strip() for author in result.get("authors", [])],
+            year=int(result.get("year", 0)) if result.get("year") else None,
+            abstract=result.get("abstract", "").strip(),
+            source="dblp",
+            identifier=result.get("key", ""),
+            url=result.get("url", ""),
+            pdf_url=result.get("pdf_url", ""),
+            published=result.get("published", ""),
+            categories=result.get("categories", []),
+            similarity=None,
+        )
     
     def _download_file(self, url: str, identifier: str) -> Tuple[str, str]:
         """

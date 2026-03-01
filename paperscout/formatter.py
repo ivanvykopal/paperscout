@@ -6,11 +6,11 @@ Formatters return Rich renderables; printing belongs in the CLI.
 
 from __future__ import annotations
 
-from typing import Any
-
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from paperscout.types import Paper
 
 
 def _truncate(text: str, max_length: int = 60) -> str:
@@ -39,14 +39,16 @@ def _year_from_date(date_str: str) -> str:
 
 
 def format_papers_table(
-    papers: list[dict],
+    papers: list[Paper | dict],
     show_abstract: bool = False,
+    show_similarity: bool = True,
 ) -> Table:
     """Build a Rich table for a list of papers.
 
     Args:
-        papers: List of paper dictionaries to display.
+        papers: List of Paper objects or dictionaries to display.
         show_abstract: If True, include the abstract column.
+        show_similarity: If True, include the similarity score column.
 
     Returns:
         A Rich Table.
@@ -56,6 +58,8 @@ def format_papers_table(
     table.add_column("Year", justify="right", no_wrap=True)
     table.add_column("Title", style="bold")
     table.add_column("Authors", max_width=30)
+    if show_similarity:
+        table.add_column("Sim.", justify="right", no_wrap=True, style="cyan")
     if show_abstract:
         table.add_column("Abstract", max_width=80)
 
@@ -63,14 +67,34 @@ def format_papers_table(
         if not paper:
             continue
 
-        source = paper.get("_source", paper.get("source", "")).upper()
-        year = _year_from_date(str(paper.get("year") or ""))
-        title = _truncate(paper.get("title", ""), 50)
-        authors = _format_authors(paper.get("authors", []) or [])
+        # Handle both Paper objects and dicts
+        if isinstance(paper, Paper):
+            source = paper.source.upper()
+            year = _year_from_date(str(paper.year or ""))
+            title = _truncate(paper.title, 50)
+            authors = _format_authors(paper.authors or [])
+        else:
+            source = paper.get("_source", paper.get("source", "")).upper()
+            year = _year_from_date(str(paper.get("year") or ""))
+            title = _truncate(paper.get("title", ""), 50)
+            authors = _format_authors(paper.get("authors", []) or [])
 
         row = [source, year, title, authors]
+
+        # Similarity score
+        if show_similarity:
+            if isinstance(paper, Paper):
+                sim = paper.similarity
+            else:
+                sim = paper.get("similarity") or paper.get("_similarity")
+            sim_str = f"{sim:.1%}" if sim is not None else ""
+            row.append(sim_str)
+
         if show_abstract:
-            abstract = _truncate(paper.get("abstract", "") or "", 70)
+            if isinstance(paper, Paper):
+                abstract = _truncate(paper.abstract or "", 70)
+            else:
+                abstract = _truncate(paper.get("abstract", "") or "", 70)
             row.append(abstract)
         table.add_row(*row)
 
@@ -81,63 +105,83 @@ def format_papers_table(
     return table
 
 
-def format_paper_detail(paper: dict) -> Panel:
+def format_paper_detail(paper: Paper | dict) -> Panel:
     """Build a detailed single-paper view as a Rich Panel.
 
     Args:
-        paper: Paper dictionary to display.
+        paper: Paper object or dictionary to display.
 
     Returns:
         A Rich Panel.
     """
     lines = Text()
 
+    # Handle both Paper objects and dicts
+    if isinstance(paper, Paper):
+        title = paper.title
+        source = paper.source.upper()
+        authors = paper.authors or []
+        year = paper.year
+        identifier = paper.identifier
+        url = paper.url
+        pdf_url = paper.pdf_url
+        abstract = paper.abstract
+    else:
+        title = paper.get("title", "")
+        source = paper.get("_source", paper.get("source", "")).upper()
+        authors = paper.get("authors", []) or []
+        year = paper.get("year")
+        identifier = paper.get("identifier", "")
+        url = paper.get("url", "") or paper.get("abstract_url", "")
+        pdf_url = paper.get("pdf_url", "")
+        abstract = paper.get("abstract", "")
+
     # Title
-    title = paper.get("title", "")
     lines.append(title, style="bold")
     lines.append("\n\n")
 
     # Source
-    source = paper.get("_source", paper.get("source", "")).upper()
     lines.append(f"Source: {source}\n", style="dim")
 
+    # Similarity score (if available)
+    if isinstance(paper, Paper):
+        sim = paper.similarity
+    else:
+        sim = paper.get("similarity") or paper.get("_similarity")
+    if sim is not None:
+        lines.append(f"Similarity: {sim:.1%}\n", style="cyan")
+
     # Authors
-    authors = paper.get("authors", []) or []
     if authors:
         lines.append("Authors: ", style="bold")
         lines.append(", ".join(authors))
         lines.append("\n")
 
     # Year
-    year = paper.get("year")
     if year:
         lines.append("Year: ", style="bold")
         lines.append(str(year))
         lines.append("\n")
 
     # Identifier
-    identifier = paper.get("identifier", "")
     if identifier:
         lines.append("ID: ", style="bold")
         lines.append(identifier)
         lines.append("\n")
 
     # URL
-    url = paper.get("url", "") or paper.get("abstract_url", "")
     if url:
         lines.append("URL: ", style="bold")
         lines.append(url)
         lines.append("\n")
 
     # PDF URL (if available)
-    pdf_url = paper.get("pdf_url", "")
     if pdf_url:
         lines.append("PDF: ", style="bold")
         lines.append(pdf_url)
         lines.append("\n")
 
     # Abstract (if available)
-    abstract = paper.get("abstract", "")
     if abstract:
         lines.append("\n")
         lines.append("Abstract: ", style="bold")

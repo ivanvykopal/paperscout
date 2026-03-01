@@ -5,6 +5,8 @@ Base backend interface for paperscout backends.
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
+from paperscout.types import Paper
+
 
 class BaseBackend(ABC):
     """
@@ -28,7 +30,7 @@ class BaseBackend(ABC):
         self.api_key = api_key
 
     @abstractmethod
-    def search(self, query: str, limit: int = 10, **kwargs) -> List[Dict]:
+    def search(self, query: str, limit: int = 10, **kwargs) -> List[Paper]:
         """
         Search for papers.
 
@@ -38,11 +40,10 @@ class BaseBackend(ABC):
             **kwargs: Backend-specific parameters.
 
         Returns:
-            List of paper search results as dictionaries.
+            List of Paper objects.
         """
         pass
 
-    @abstractmethod
     def download(self, identifier: str, **kwargs) -> Dict:
         """
         Download a paper by identifier.

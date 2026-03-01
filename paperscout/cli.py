@@ -82,6 +82,17 @@ def main():
         action="store_true",
         help="Output results as JSON",
     )
+    search_parser.add_argument(
+        "-a",
+        "--abstract",
+        action="store_true",
+        help="Show abstract in results",
+    )
+    search_parser.add_argument(
+        "--no-similarity",
+        action="store_true",
+        help="Hide similarity score in results",
+    )
 
     # Download command
     download_parser = subparsers.add_parser(
@@ -126,7 +137,7 @@ def main():
         results = client.search(
             args.query, source=args.source, limit=args.limit
         )
-        output_results(results, args.output, args.json)
+        output_results(results, args.output, args.json, show_abstract=args.abstract, show_similarity=not args.no_similarity)
 
     elif args.command == "download":
         result = client.download(args.identifier)
@@ -134,14 +145,14 @@ def main():
 
 
 def output_results(
-    data, output_file: Optional[str] = None, as_json: bool = False
+    data, output_file: Optional[str] = None, as_json: bool = False, show_abstract: bool = False, show_similarity: bool = True
 ):
     """Output results to file or stdout."""
     if as_json:
         output = json.dumps(data, indent=2)
     else:
         if isinstance(data, list):
-            output = format_papers_table(data)
+            output = format_papers_table(data, show_abstract=show_abstract, show_similarity=show_similarity)
         else:
             output = format_paper_detail(data)
 

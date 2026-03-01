@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from paperscout.backends.base import BaseBackend
 from paperscout.similarity import _title_similarity
+from paperscout.types import Paper
 
 try:
     from acl_anthology import Anthology
@@ -46,7 +47,7 @@ class ACLAnthologyBackend(BaseBackend):
         self,
         query: str,
         limit: int = 10,
-    ) -> List[Dict]:
+    ) -> List[Paper]:
         """
         Search for papers in ACL Anthology.
 
@@ -55,7 +56,7 @@ class ACLAnthologyBackend(BaseBackend):
             limit: Maximum number of results to return.
 
         Returns:
-            List of paper search results as dictionaries.
+            List of Paper objects.
         """
         if not ACL_ANTHOLOGY_AVAILABLE:
             raise ImportError(
@@ -65,9 +66,9 @@ class ACLAnthologyBackend(BaseBackend):
         # Search by iterating through all papers and filtering by title
         results = self._search(query, limit=limit)
 
-        return [self._format_result(paper) for paper in results]
+        return [self._format_result(paper, similarity) for paper, similarity in results]
 
-    def _search(self, query: str, limit: int = 10) -> List[Any]:
+    def _search(self, query: str, limit: int = 10) -> List[Tuple[Any, float]]:
         """
         Search ACL Anthology papers by title or abstract.
 
@@ -79,7 +80,7 @@ class ACLAnthologyBackend(BaseBackend):
             limit: Maximum number of results to return.
 
         Returns:
-            List of matching papers sorted by relevance.
+            List of (paper, similarity) tuples sorted by relevance.
         """
         # Collect papers that match the query
         matching_papers = []
@@ -111,8 +112,8 @@ class ACLAnthologyBackend(BaseBackend):
         # Sort by similarity (highest first)
         matching_papers.sort(key=lambda x: x[1], reverse=True)
 
-        # Return top results
-        return [paper for paper, _ in matching_papers[:limit]]
+        # Return top results with similarity scores
+        return matching_papers[:limit]
 
     def download(self, identifier: str, **kwargs) -> Dict:
         """
@@ -169,29 +170,51 @@ class ACLAnthologyBackend(BaseBackend):
             "authors": paper.authors if hasattr(paper, 'authors') else [],
         }
 
-    def _format_result(self, paper: Any) -> Dict:
+    def _format_result(self, paper: Any, similarity: float = 0.0) -> Paper:
         """
         Format ACL Anthology paper to standard format.
 
         Args:
             paper: Raw paper object from acl-anthology.
+            similarity: Relevance score calculated during search.
 
         Returns:
-            Formatted result dictionary.
+            Paper object.
         """
-        return {
-            "title": getattr(paper, 'title', '').strip(),
-            "authors": getattr(paper, 'authors', []),
-            "year": int(getattr(paper, 'year', 0)) if getattr(paper, 'year') else None,
-            "abstract": getattr(paper, 'abstract', '').strip() if hasattr(paper, 'abstract') else "",
-            "source": "acl_anthology",
-            "identifier": getattr(paper, 'id', getattr(paper, 'id', '')),
-            "url": getattr(paper, 'web_url', ''),
-            "pdf_url": getattr(paper, 'pdf', getattr(paper, 'pdf', '')),
-            "published": getattr(paper, 'ingest_date', ''),
-            "venue": getattr(paper, 'venue', ''),
-            "pages": getattr(paper, 'pages', ''),
-        }
+        def _get_str_attr(obj: Any, name: str, default: str = "") -> str:
+            """Get a string attribute from an object, handling MarkupText and other types."""
+            value = getattr(obj, name, default)
+            if value is None:
+                return default
+            return str(value)
+
+        return Paper(
+            title=_get_str_attr(paper, 'title', '').strip(),
+            authors=self._parse_authors(getattr(paper, 'authors', [])),
+            year=int(getattr(paper, 'year', 0)) if getattr(paper, 'year') else None,
+            abstract=_get_str_attr(paper, 'abstract', '').strip() if hasattr(paper, 'abstract') else "",
+            source="acl_anthology",
+            identifier=_get_str_attr(paper, 'id', ''),
+            url=_get_str_attr(paper, 'web_url', ''),
+            pdf_url=self._parse_pdf_url(paper),
+            published=_get_str_attr(paper, 'ingest_date', ''),
+            categories=[_get_str_attr(paper, 'venue', '')] if getattr(paper, 'venue', '') else [],
+            similarity=similarity if similarity > 0 else None,
+        )
+    
+    def _parse_authors(self, authors: Any) -> List[str]:
+        if not authors:
+            return []
+        if isinstance(authors, list):
+            return [f"{getattr(a, 'first', '')} {getattr(a, 'last', '')}".strip() for a in authors]
+
+    def _parse_pdf_url(self, paper: Any) -> str:
+        web_url = getattr(paper, 'web_url', '')
+        if web_url and web_url.endswith('/'):
+            return web_url[:-1] + '.pdf'
+        elif web_url:
+            return web_url + '.pdf'
+        return ""
 
     def _download_file(self, url: str, identifier: str) -> Tuple[str, str]:
         """

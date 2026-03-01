@@ -4,10 +4,11 @@ Semantic Scholar backend using the s2cli library.
 
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from paperscout.backends.base import BaseBackend
 from s2cli.api.client import SemanticScholarAPI
+from paperscout.types import Paper
 
 try:
     import s2cli
@@ -46,7 +47,7 @@ class SemanticScholarBackend(BaseBackend):
             self,
             query: str,
             limit: int = 10
-        ) -> List[Dict]:
+        ) -> List[Paper]:
         """
         Search for papers on Semantic Scholar.
 
@@ -58,7 +59,7 @@ class SemanticScholarBackend(BaseBackend):
             sort_order: Optional sort order ('ascending' or 'descending').
 
         Returns:
-            List of paper search results as dictionaries.
+            List of Paper objects.
         """
         results = self.client.search_papers(
             query=query,
@@ -97,7 +98,7 @@ class SemanticScholarBackend(BaseBackend):
             "authors": paper.get("authors", []),
         }
 
-    def _format_result(self, result: Dict) -> Dict:
+    def _format_result(self, result: Dict) -> Paper:
         """
         Format Semantic Scholar result dictionary to standard format.
 
@@ -105,21 +106,21 @@ class SemanticScholarBackend(BaseBackend):
             result: Raw result from Semantic Scholar query.
 
         Returns:
-            Formatted result dictionary.
+            Paper object.
         """
-        return result
-        # return {
-        #     "title": result.title.strip(),
-        #     "authors": [author.name.strip() for author in result.authors],
-        #     "year": int(result.published.split("-")[0]) if result.published else None,
-        #     "abstract": result.summary.strip() if hasattr(result, 'summary') else "",
-        #     "source": "semantic_scholar",
-        #     "identifier": result.s2_id,
-        #     "url": result.abstract_url if hasattr(result, 'abstract_url') else "",
-        #     "pdf_url": result.pdf_url if hasattr(result, 'pdf_url') else "",
-        #     "published": result.published,
-        #     "categories": result.categories if hasattr(result, 'categories') else [],
-        # }
+        return Paper(
+            title=result.get("title", "").strip(),
+            authors=result.get("authors", []),
+            year=int(result.get("year", 0)) if result.get("year") else None,
+            abstract=result.get("abstract", "").strip(),
+            source="semantic_scholar",
+            identifier=result.get("s2_id", result.get("paperId", "")),
+            url=result.get("url", ""),
+            pdf_url=result.get("pdf_url", ""),
+            published=result.get("published", ""),
+            categories=result.get("venue", result.get("categories", [])),
+            similarity=None,
+        )
     
     def _download_file(self, url: str, identifier: str) -> Tuple[str, str]:
         """
