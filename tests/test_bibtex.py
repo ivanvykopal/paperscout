@@ -3,7 +3,6 @@ Tests for Paper.to_bibtex() method and BibtexVerifier class.
 """
 
 import unittest
-import pytest
 from paperscout.types import Paper
 
 
@@ -199,3 +198,96 @@ class TestBibtexVerifier(unittest.TestCase):
             self.assertEqual(len(results), 0)
         finally:
             os.unlink(temp_path)
+
+    def test_format_report(self):
+        """Test format_report produces expected output."""
+        from paperscout.bibtex import BibtexVerifier, VerificationResult
+        from paperscout.types import Paper
+
+        verifier = BibtexVerifier()
+
+        # Create mock verification results
+        results = [
+            VerificationResult(
+                bib_key="vaswani2017attention",
+                original_title="Attention Is All You Need",
+                confidence=0.95,
+                verdict="verified",
+                matched_paper=Paper(
+                    title="Attention Is All You Need",
+                    authors=["Ashish Vaswani"],
+                    year=2017,
+                    abstract="Test abstract",
+                    source="arxiv",
+                    identifier="1706.03762",
+                    url="https://arxiv.org/abs/1706.03762",
+                    pdf_url=None,
+                    published=None,
+                    categories=[],
+                ),
+                backend_used="arxiv",
+                discrepancies=[],
+            ),
+            VerificationResult(
+                bib_key="unknown2020paper",
+                original_title="Some Unknown Paper",
+                confidence=0.40,
+                verdict="suspicious",
+                matched_paper=None,
+                backend_used=None,
+                discrepancies=["No matching paper found"],
+            ),
+        ]
+
+        report = verifier.format_report(results)
+
+        # Check key elements are present
+        self.assertIn("BibTeX Verification Report", report)
+        self.assertIn("Total entries: 2", report)
+        self.assertIn("Verified: 1", report)
+        self.assertIn("Uncertain: 0", report)
+        self.assertIn("Suspicious: 1", report)
+        self.assertIn("vaswani2017attention", report)
+        self.assertIn("unknown2020paper", report)
+        self.assertIn("0.95", report)
+        self.assertIn("0.40", report)
+
+    def test_export_as_table(self):
+        """Test export_as_table returns a Rich Table."""
+        from paperscout.bibtex import BibtexVerifier, VerificationResult
+        from paperscout.types import Paper
+        from rich.table import Table
+
+        verifier = BibtexVerifier()
+
+        results = [
+            VerificationResult(
+                bib_key="test2020key",
+                original_title="Test Paper Title",
+                confidence=0.75,
+                verdict="uncertain",
+                matched_paper=Paper(
+                    title="Test Paper Title",
+                    authors=["Test Author"],
+                    year=2020,
+                    abstract="Test",
+                    source="arxiv",
+                    identifier="2001.00001",
+                    url="https://arxiv.org/abs/2001.00001",
+                    pdf_url=None,
+                    published=None,
+                    categories=[],
+                ),
+                backend_used="arxiv",
+                discrepancies=[],
+            ),
+        ]
+
+        table = verifier.export_as_table(results)
+
+        # Verify it's a Rich Table
+        self.assertIsInstance(table, Table)
+        # Check title
+        self.assertEqual(table.title, "BibTeX Verification Results")
+        # Check columns exist
+        self.assertEqual(len(table.columns), 5)
