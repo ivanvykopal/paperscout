@@ -145,7 +145,7 @@ class BibtexVerifier:
     ) -> VerificationResult:
         """Verify a single BibTeX entry."""
         bib_key = entry.get('ID', '')
-        title = entry.get('title', '')
+        title = entry.get('TITLE', '')
 
         # Search for matching paper
         results = self.searcher.search(query=title, source=sources, limit=1)
@@ -164,18 +164,17 @@ class BibtexVerifier:
             )
 
         best_match = results[0]
-        similarity = _title_similarity(title, best_match.title)
+
+        # Compute confidence using comprehensive scoring
+        confidence, discrepancies = self._compute_confidence(entry, best_match)
 
         # Determine verdict based on confidence
-        if similarity >= self.VERIFIED_THRESHOLD:
+        if confidence >= self.VERIFIED_THRESHOLD:
             verdict = "verified"
-        elif similarity >= self.UNCERTAIN_THRESHOLD:
+        elif confidence >= self.UNCERTAIN_THRESHOLD:
             verdict = "uncertain"
         else:
             verdict = "suspicious"
-
-        # Check for discrepancies
-        discrepancies = self._find_discrepancies(entry, best_match)
 
         # Enrich entry if requested
         enriched_entry = None
@@ -185,7 +184,7 @@ class BibtexVerifier:
         return VerificationResult(
             bib_key=bib_key,
             original_title=title,
-            confidence=similarity,
+            confidence=confidence,
             verdict=verdict,
             matched_paper=best_match,
             backend_used=best_match.source,
@@ -199,7 +198,7 @@ class BibtexVerifier:
         discrepancies = []
 
         # Check year
-        entry_year = entry.get('year')
+        entry_year = entry.get('YEAR')
         if entry_year and matched_paper.year:
             try:
                 if int(entry_year) != matched_paper.year:
@@ -208,7 +207,7 @@ class BibtexVerifier:
                 pass
 
         # Check authors
-        entry_authors = entry.get('author', '')
+        entry_authors = entry.get('AUTHOR', '')
         if entry_authors:
             paper_authors_str = " and ".join(matched_paper.authors)
             if entry_authors.lower() != paper_authors_str.lower():
@@ -222,15 +221,15 @@ class BibtexVerifier:
 
         # Update fields from matched paper
         if matched_paper.title:
-            enriched['title'] = matched_paper.title
+            enriched['TITLE'] = matched_paper.title
         if matched_paper.authors:
-            enriched['author'] = " and ".join(matched_paper.authors)
+            enriched['AUTHOR'] = " and ".join(matched_paper.authors)
         if matched_paper.year:
-            enriched['year'] = str(matched_paper.year)
+            enriched['YEAR'] = str(matched_paper.year)
         if matched_paper.abstract:
-            enriched['abstract'] = matched_paper.abstract
+            enriched['ABSTRACT'] = matched_paper.abstract
         if matched_paper.url:
-            enriched['url'] = matched_paper.url
+            enriched['URL'] = matched_paper.url
 
         return enriched
 
