@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "paperscout"
-version = "0.1.2"
+version = "0.2.0"
 description = "A multi-purpose tool for searching, downloading, and managing academic papers"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -40,18 +40,19 @@ dependencies = [
     "requests>=2.28.0",
     "beautifulsoup4>=4.11.0",
     "rich>=13.0.0",
+    "bibtexparser>=1.4.0",
 ]
 
 [project.optional-dependencies]
-arxiv = ["arxivy>=0.2.0"]
+arxiv = ["arxivy>=0.1.0"]
 dblp = ["dblpcli>=0.1.0"]
 semantic_scholar = ["s2cli>=0.1.0"]
-acl_anthology = ["acl-anthology>=0.5.0"]
+acl_anthology = ["acl-anthology>=1.2.0"]
 all = [
-    "arxivy>=0.2.0",
+    "arxivy>=0.1.0",
     "dblpcli>=0.1.0",
     "s2cli>=0.1.0",
-    "acl-anthology>=0.5.0",
+    "acl-anthology>=1.2.0",
 ]
 
 [project.scripts]
