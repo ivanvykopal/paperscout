@@ -495,7 +495,7 @@ class BibtexVerifier:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(output_lines))
 
-    def _generate_json_report(self, path: str, results: list[VerificationResult]) -> None:
+    def generate_json_report(self, path: str, results: list[VerificationResult]) -> None:
         """
         Generate a JSON verification report.
 
@@ -511,7 +511,6 @@ class BibtexVerifier:
                 "original_title": r.original_title,
                 "verdict": r.verdict,
                 "confidence": round(r.confidence, 3),
-                "tier": r.verdict,
                 "matched_paper": r.matched_paper.to_dict() if r.matched_paper else None,
                 "backend_used": r.backend_used,
                 "discrepancies": r.discrepancies,

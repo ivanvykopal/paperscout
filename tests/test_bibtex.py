@@ -1130,6 +1130,10 @@ class TestAnnotatedOutput(unittest.TestCase):
         # the enriched fields (DOI, URL) directly in the BibTeX entry rather than
         # just as comment annotations
 
+
+class TestJsonReport(unittest.TestCase):
+    """Test cases for JSON report generation."""
+
     def test_generate_json_report(self):
         """Test generating JSON verification report."""
         from paperscout.bibtex import BibtexVerifier, VerificationResult
@@ -1155,7 +1159,7 @@ class TestAnnotatedOutput(unittest.TestCase):
             json_path = f.name
 
         try:
-            verifier._generate_json_report(json_path, results)
+            verifier.generate_json_report(json_path, results)
 
             with open(json_path, 'r') as f:
                 report = json.load(f)
@@ -1164,5 +1168,64 @@ class TestAnnotatedOutput(unittest.TestCase):
             self.assertEqual(report[0]["bib_key"], "test2020")
             self.assertEqual(report[0]["verdict"], "verified")
             self.assertAlmostEqual(report[0]["confidence"], 0.95, places=2)
+            # Verify tier field is NOT present (it was removed as redundant)
+            self.assertNotIn("tier", report[0])
         finally:
             os.unlink(json_path)
+
+    def test_generate_json_report_with_paper(self):
+        """Test that matched_paper.to_dict() works correctly in JSON output."""
+        from paperscout.bibtex import BibtexVerifier, VerificationResult
+        import tempfile
+        import os
+        import json
+
+        verifier = BibtexVerifier()
+        matched_paper = Paper(
+            title="Attention Is All You Need",
+            authors=["Ashish Vaswani", "Noam Shazeer"],
+            year=2017,
+            abstract="The Transformer is a new architecture...",
+            source="arxiv",
+            identifier="1706.03762",
+            url="https://arxiv.org/abs/1706.03762",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+
+        results = [
+            VerificationResult(
+                bib_key="vaswani2017attention",
+                original_title="Attention Is All You Need",
+                confidence=0.95,
+                verdict="verified",
+                matched_paper=matched_paper,
+                backend_used="arxiv",
+                discrepancies=[],
+                error=None,
+            )
+        ]
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json_path = f.name
+
+        try:
+            verifier.generate_json_report(json_path, results)
+
+            with open(json_path, 'r') as f:
+                report = json.load(f)
+
+            self.assertEqual(len(report), 1)
+            self.assertEqual(report[0]["bib_key"], "vaswani2017attention")
+            # Verify matched_paper is serialized correctly
+            self.assertIsNotNone(report[0]["matched_paper"])
+            self.assertEqual(report[0]["matched_paper"]["title"], "Attention Is All You Need")
+            self.assertEqual(report[0]["matched_paper"]["authors"], ["Ashish Vaswani", "Noam Shazeer"])
+            self.assertEqual(report[0]["matched_paper"]["year"], 2017)
+            self.assertEqual(report[0]["matched_paper"]["source"], "arxiv")
+            self.assertEqual(report[0]["matched_paper"]["identifier"], "1706.03762")
+            self.assertEqual(report[0]["matched_paper"]["url"], "https://arxiv.org/abs/1706.03762")
+        finally:
+            os.unlink(json_path)
+
