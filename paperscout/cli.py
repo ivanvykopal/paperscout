@@ -48,6 +48,11 @@ def main():
         action="store_true",
         help="Output results as JSON",
     )
+    match_parser.add_argument(
+        "--bibtex",
+        action="store_true",
+        help="Output results as BibTeX",
+    )
 
     # Search command
     search_parser = subparsers.add_parser(
@@ -92,6 +97,11 @@ def main():
         "--no-similarity",
         action="store_true",
         help="Hide similarity score in results",
+    )
+    search_parser.add_argument(
+        "--bibtex",
+        action="store_true",
+        help="Output results as BibTeX",
     )
 
     # Download command
@@ -165,7 +175,10 @@ def main():
         )
         if results:
             best_match = results[0]
-            output_results(best_match, args.output, args.json)
+            if args.bibtex:
+                output_results(best_match.to_bibtex(), args.output, as_json=False)
+            else:
+                output_results(best_match, args.output, args.json)
         else:
             console.print("[bold red]No matching paper found.[/bold red]")
             sys.exit(1)
@@ -174,12 +187,17 @@ def main():
         results = client.search(
             args.query, source=args.source, limit=args.limit
         )
-        output_results(
-            results, args.output, args.json,
-            show_abstract=args.abstract,
-            show_similarity=not args.no_similarity,
-            total_found=client.last_search_total,
-        )
+        if args.bibtex:
+            # Output as BibTeX
+            bibtex_output = "\n\n".join(p.to_bibtex() for p in results)
+            output_results(bibtex_output, args.output, as_json=False)
+        else:
+            output_results(
+                results, args.output, args.json,
+                show_abstract=args.abstract,
+                show_similarity=not args.no_similarity,
+                total_found=client.last_search_total,
+            )
 
     elif args.command == "download":
         result = client.download(args.identifier)
@@ -225,7 +243,10 @@ def output_results(
     if as_json:
         output = json.dumps(data, indent=2)
     else:
-        if isinstance(data, list):
+        if isinstance(data, str):
+            # Direct string output (e.g., BibTeX)
+            output = data
+        elif isinstance(data, list):
             output = format_papers_table(
                 data,
                 show_abstract=show_abstract,
