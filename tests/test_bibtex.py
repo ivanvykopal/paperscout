@@ -1316,3 +1316,58 @@ class TestJsonReport(unittest.TestCase):
         finally:
             os.unlink(json_path)
 
+
+class TestIntegration(unittest.TestCase):
+    """Integration tests for BibTeX verification workflow."""
+
+    def test_full_verification_workflow(self):
+        """Test full verification workflow with mocked backends."""
+        from paperscout.bibtex import BibtexVerifier, VerificationResult
+        from paperscout.types import Paper
+        from unittest.mock import patch
+        import tempfile
+        import os
+
+        # Create test .bib file
+        bib_content = '''
+@article{vaswani2017attention,
+  title={Attention Is All You Need},
+  author={Vaswani, Ashish},
+  year={2017}
+}
+@article{fake2025quantum,
+  title={Completely Fake Quantum Paper},
+  author={Fake, Author},
+  year={2025}
+}
+'''
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.bib', delete=False) as f:
+            f.write(bib_content)
+            temp_path = f.name
+
+        try:
+            verifier = BibtexVerifier()
+
+            # Mock successful search for first, empty for second
+            mock_paper = Paper(
+                title="Attention Is All You Need",
+                authors=["Ashish Vaswani"],
+                year=2017,
+                abstract=None,
+                source="arxiv",
+                identifier="1706.03762",
+                url="",
+                pdf_url=None,
+                published=None,
+                categories=[],
+            )
+
+            with patch.object(verifier.searcher, 'search', side_effect=[[mock_paper], []]):
+                results = verifier.verify_file(temp_path)
+
+                self.assertEqual(len(results), 2)
+                self.assertEqual(results[0].verdict, "verified")
+                self.assertEqual(results[1].verdict, "suspicious")
+        finally:
+            os.unlink(temp_path)
+
