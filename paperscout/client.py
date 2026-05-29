@@ -84,3 +84,29 @@ class PaperFinderClient:
             Path to the downloaded paper or paper metadata.
         """
         return self.searcher.download(identifier, source, **kwargs)
+
+    def verify_bibtex(
+        self,
+        path: str,
+        sources: list[str] | None = None,
+        enrich: bool = False,
+        threshold: float = 0.5,
+        parallel: bool = False,
+    ) -> list:
+        """
+        Verify BibTeX entries in a file.
+
+        Args:
+            path: Path to .bib file.
+            sources: Specific backends to use.
+            enrich: Whether to enrich entries.
+            threshold: Confidence threshold.
+            parallel: Whether to run in parallel.
+
+        Returns:
+            List of VerificationResult objects.
+        """
+        from paperscout.bibtex import BibtexVerifier
+
+        verifier = BibtexVerifier(threshold=threshold)
+        return verifier.verify_file(path, sources=sources, enrich=enrich, parallel=parallel)
