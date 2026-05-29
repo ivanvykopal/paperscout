@@ -187,6 +187,60 @@ print(similarity)  # 1.0 for exact match
 | `semantic_scholar` | SemanticScholarBackend | Academic paper search |
 | `acl_anthology` | ACLAnthologyBackend | ACL/EMNLP/NAACL papers |
 
+## BibTeX Support
+
+### Export Papers as BibTeX
+
+```bash
+# Search and export as BibTeX
+paperscout search "Attention Is All You Need" --bibtex
+
+# Save to file
+paperscout match "Transformer" --bibtex --output citations.bib
+```
+
+```python
+from paperscout import Paper
+
+paper = Paper(...)
+bibtex = paper.to_bibtex()
+# or with custom key
+bibtex = paper.to_bibtex(entry_key="vaswani2017")
+```
+
+### Verify BibTeX Files
+
+Verify that papers in a BibTeX file actually exist in academic databases:
+
+```bash
+# Basic verification
+paperscout verify references.bib
+
+# With specific backends
+paperscout verify references.bib --source arxiv,dblp
+
+# Enrich entries with discovered metadata
+paperscout verify references.bib --enrich
+
+# Output annotated .bib and JSON report
+paperscout verify references.bib --output verified.bib --json report.json
+```
+
+```python
+from paperscout import PaperFinderClient
+
+client = PaperFinderClient()
+results = client.verify_bibtex("references.bib")
+
+for result in results:
+    print(f"{result.bib_key}: {result.verdict} ({result.confidence:.0%})")
+```
+
+The verifier outputs:
+- **Console report**: Rich table showing verification status for each entry
+- **Annotated .bib**: Original file with verification comments
+- **JSON report**: Structured data for downstream processing
+
 ## CLI Output
 
 The CLI uses rich formatting for better readability:
