@@ -859,3 +859,202 @@ class TestVerifyEntry(unittest.TestCase):
         self.assertEqual(enriched["DOI"], "existing.doi")
         self.assertEqual(enriched["URL"], "https://existing.url")
         self.assertEqual(enriched["ABSTRACT"], "Existing abstract")
+
+
+class TestAnnotatedOutput(unittest.TestCase):
+    """Test cases for annotated BibTeX output."""
+
+    def setUp(self):
+        import tempfile
+        from paperscout.bibtex import BibtexVerifier, VerificationResult
+        self.verifier = BibtexVerifier()
+        self.VerificationResult = VerificationResult
+        self.temp_dir = tempfile.mkdtemp()
+
+    def test_write_annotated_bibtex(self):
+        """Test writing annotated BibTeX file."""
+        import os
+
+        # Create input file
+        bib_content = '''@article{test2020,
+  title={Test Paper},
+  author={Doe, John},
+  year={2020}
+}'''
+
+        input_path = os.path.join(self.temp_dir, "test.bib")
+        output_path = os.path.join(self.temp_dir, "test.out.bib")
+
+        with open(input_path, 'w') as f:
+            f.write(bib_content)
+
+        results = [
+            self.VerificationResult(
+                bib_key="test2020",
+                original_title="Test Paper",
+                confidence=0.95,
+                verdict="verified",
+                matched_paper=None,
+                backend_used="arxiv",
+                discrepancies=[],
+                error=None,
+            )
+        ]
+
+        self.verifier._write_annotated_bibtex(input_path, output_path, results)
+
+        with open(output_path, 'r') as f:
+            output = f.read()
+
+        self.assertIn("% verification_status: verified", output)
+        self.assertIn("% verification_score: 0.95", output)
+        self.assertIn("@article{test2020", output)
+
+    def test_write_annotated_bibtex_with_matched_paper(self):
+        """Test annotated output includes matched paper title."""
+        import os
+        from paperscout.types import Paper
+
+        bib_content = '''@article{test2021,
+  title={Another Test},
+  author={Smith, Jane},
+  year={2021}
+}'''
+
+        input_path = os.path.join(self.temp_dir, "test2.bib")
+        output_path = os.path.join(self.temp_dir, "test2.out.bib")
+
+        with open(input_path, 'w') as f:
+            f.write(bib_content)
+
+        matched_paper = Paper(
+            title="Another Test Paper",
+            authors=["Jane Smith"],
+            year=2021,
+            abstract="Test abstract",
+            source="arxiv",
+            identifier="2101.00001",
+            url="https://arxiv.org/abs/2101.00001",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+
+        results = [
+            self.VerificationResult(
+                bib_key="test2021",
+                original_title="Another Test",
+                confidence=0.85,
+                verdict="verified",
+                matched_paper=matched_paper,
+                backend_used="arxiv",
+                discrepancies=[],
+                error=None,
+            )
+        ]
+
+        self.verifier._write_annotated_bibtex(input_path, output_path, results)
+
+        with open(output_path, 'r') as f:
+            output = f.read()
+
+        self.assertIn("% verification_status: verified", output)
+        self.assertIn("% verification_score: 0.85", output)
+        self.assertIn("% verification_source: arxiv", output)
+        self.assertIn("% verification_matched_title: Another Test Paper", output)
+
+    def test_write_annotated_bibtex_with_discrepancies(self):
+        """Test annotated output includes discrepancies."""
+        import os
+
+        bib_content = '''@article{test2022,
+  title={Different Title},
+  author={Doe, John},
+  year={2022}
+}'''
+
+        input_path = os.path.join(self.temp_dir, "test3.bib")
+        output_path = os.path.join(self.temp_dir, "test3.out.bib")
+
+        with open(input_path, 'w') as f:
+            f.write(bib_content)
+
+        results = [
+            self.VerificationResult(
+                bib_key="test2022",
+                original_title="Different Title",
+                confidence=0.60,
+                verdict="uncertain",
+                matched_paper=None,
+                backend_used="arxiv",
+                discrepancies=["year mismatch: 2022 vs 2020", "low author overlap"],
+                error=None,
+            )
+        ]
+
+        self.verifier._write_annotated_bibtex(input_path, output_path, results)
+
+        with open(output_path, 'r') as f:
+            output = f.read()
+
+        self.assertIn("% verification_status: uncertain", output)
+        self.assertIn("% verification_score: 0.60", output)
+        self.assertIn("year mismatch", output)
+        self.assertIn("low author overlap", output)
+
+    def test_write_annotated_bibtex_multiple_entries(self):
+        """Test annotated output with multiple entries."""
+        import os
+
+        bib_content = '''@article{entry1,
+  title={First Paper},
+  author={Author One},
+  year={2020}
+}
+
+@inproceedings{entry2,
+  title={Second Paper},
+  author={Author Two},
+  year={2021}
+}'''
+
+        input_path = os.path.join(self.temp_dir, "test4.bib")
+        output_path = os.path.join(self.temp_dir, "test4.out.bib")
+
+        with open(input_path, 'w') as f:
+            f.write(bib_content)
+
+        results = [
+            self.VerificationResult(
+                bib_key="entry1",
+                original_title="First Paper",
+                confidence=0.95,
+                verdict="verified",
+                matched_paper=None,
+                backend_used="arxiv",
+                discrepancies=[],
+                error=None,
+            ),
+            self.VerificationResult(
+                bib_key="entry2",
+                original_title="Second Paper",
+                confidence=0.40,
+                verdict="suspicious",
+                matched_paper=None,
+                backend_used=None,
+                discrepancies=["not found"],
+                error="not found in any backend",
+            ),
+        ]
+
+        self.verifier._write_annotated_bibtex(input_path, output_path, results)
+
+        with open(output_path, 'r') as f:
+            output = f.read()
+
+        # Check first entry annotation
+        self.assertIn("% verification_status: verified", output)
+        self.assertIn("% verification_status: suspicious", output)
+        # Both entries should be present
+        self.assertIn("@article{entry1", output)
+        self.assertIn("@inproceedings{entry2", output)

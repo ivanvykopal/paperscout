@@ -439,3 +439,53 @@ class BibtexVerifier:
             return 0.5
         else:
             return 0.0
+
+    def _write_annotated_bibtex(
+        self,
+        input_path: str,
+        output_path: str,
+        results: list[VerificationResult],
+        enrich: bool = False,
+    ) -> None:
+        """
+        Write an annotated BibTeX file with verification results.
+
+        Args:
+            input_path: Path to original .bib file.
+            output_path: Path to output .bib file.
+            results: Verification results.
+            enrich: Whether to include enriched fields.
+        """
+        # Read original content
+        with open(input_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Build result lookup by key
+        result_map = {r.bib_key: r for r in results}
+
+        # Insert annotations before each entry
+        lines = content.split("\n")
+        output_lines = []
+
+        for line in lines:
+            # Check if this line starts a new entry
+            match = re.match(r"^(@\w+)\{(\w+)", line)
+            if match:
+                entry_key = match.group(2)
+
+                # Add annotation comments
+                if entry_key in result_map:
+                    result = result_map[entry_key]
+                    output_lines.append(f"% verification_status: {result.verdict}")
+                    output_lines.append(f"% verification_score: {result.confidence:.2f}")
+                    output_lines.append(f"% verification_source: {result.backend_used or 'none'}")
+                    if result.matched_paper:
+                        output_lines.append(f"% verification_matched_title: {result.matched_paper.title}")
+                    if result.discrepancies:
+                        output_lines.append(f"% verification_discrepancies: {', '.join(result.discrepancies)}")
+
+            output_lines.append(line)
+
+        # Write output
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(output_lines))
