@@ -1,7 +1,8 @@
 """
-Tests for Paper.to_bibtex() method.
+Tests for Paper.to_bibtex() method and BibtexVerifier class.
 """
 
+import unittest
 import pytest
 from paperscout.types import Paper
 
@@ -171,3 +172,30 @@ class TestPaperToBibtex:
         bibtex = paper.to_bibtex()
         assert "@inproceedings" in bibtex
         assert "booktitle = {Proceedings of ACL 2021}" in bibtex
+
+
+class TestBibtexVerifier(unittest.TestCase):
+    """Test cases for BibtexVerifier class."""
+
+    def test_verifier_initialization(self):
+        """Test BibtexVerifier can be instantiated."""
+        from paperscout.bibtex import BibtexVerifier
+        verifier = BibtexVerifier()
+        self.assertIsNotNone(verifier)
+
+    def test_verify_empty_file(self):
+        """Test verifying an empty .bib file returns empty results."""
+        from paperscout.bibtex import BibtexVerifier
+        import tempfile
+        import os
+
+        verifier = BibtexVerifier()
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.bib', delete=False) as f:
+            f.write("")
+            temp_path = f.name
+
+        try:
+            results = verifier.verify_file(temp_path)
+            self.assertEqual(len(results), 0)
+        finally:
+            os.unlink(temp_path)
