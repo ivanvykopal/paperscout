@@ -61,7 +61,7 @@ def _generate_citation_key(authors: List[str], year: int | None, title: str) -> 
         for p in [last_name, str(year) if year else "", significant_word]
         if p
     ]
-    key = "".join(key_parts[:3])  # Limit to 3 parts
+    key = "".join(key_parts[:3])  # Limit to 3 parts (author + year + word)
 
     # Sanitize: only alphanumeric
     key = "".join(c for c in key if c.isalnum()).lower()

@@ -134,3 +134,40 @@ class TestPaperToBibtex:
         # Should not crash and should produce valid output
         assert "@" in bibtex
         assert "title = {Anonymous Paper}" in bibtex
+
+    def test_to_bibtex_custom_entry_type(self):
+        """Custom entry_type parameter overrides auto-detection."""
+        paper = Paper(
+            title="A Test Paper",
+            authors=["John Doe"],
+            year=2020,
+            abstract="Test abstract",
+            source="arxiv",
+            identifier="2001.00001",
+            url="https://arxiv.org/abs/2001.00001",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+        # Arxiv normally produces @article, but we force @inproceedings
+        bibtex = paper.to_bibtex(entry_type="inproceedings")
+        assert "@inproceedings" in bibtex
+        assert "@article" not in bibtex
+
+    def test_to_bibtex_acl_booktitle_field(self):
+        """ACL anthology papers include booktitle field from categories."""
+        paper = Paper(
+            title="A Conference Paper",
+            authors=["Jane Smith"],
+            year=2021,
+            abstract="Test abstract",
+            source="acl_anthology",
+            identifier="P21-1001",
+            url="https://aclanthology.org/P21-1001/",
+            pdf_url=None,
+            published=None,
+            categories=["Proceedings of ACL 2021"],
+        )
+        bibtex = paper.to_bibtex()
+        assert "@inproceedings" in bibtex
+        assert "booktitle = {Proceedings of ACL 2021}" in bibtex
