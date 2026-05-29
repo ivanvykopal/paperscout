@@ -256,6 +256,7 @@ class TestBibtexVerifier(unittest.TestCase):
         """Test formatting verification results as Rich table."""
         from paperscout.bibtex import BibtexVerifier, VerificationResult
         from rich.table import Table
+        from paperscout.types import Paper
 
         verifier = BibtexVerifier()
         results = [
@@ -264,7 +265,18 @@ class TestBibtexVerifier(unittest.TestCase):
                 original_title="Test Paper",
                 confidence=0.95,
                 verdict="verified",
-                matched_paper=None,
+                matched_paper=Paper(
+                    title="Test Paper Verified",
+                    authors=["Test Author"],
+                    year=2020,
+                    abstract="Test abstract",
+                    source="arxiv",
+                    identifier="2001.00001",
+                    url="https://arxiv.org/abs/2001.00001",
+                    pdf_url=None,
+                    published=None,
+                    categories=[],
+                ),
                 backend_used="arxiv",
                 discrepancies=[],
                 error=None,
@@ -277,7 +289,28 @@ class TestBibtexVerifier(unittest.TestCase):
                 matched_paper=None,
                 backend_used=None,
                 discrepancies=[],
-                error="not found",
+                error="not found in any backend",
+            ),
+            VerificationResult(
+                bib_key="uncertain2021",
+                original_title="This is a very long paper title that should be truncated when displayed in the table view",
+                confidence=0.65,
+                verdict="uncertain",
+                matched_paper=Paper(
+                    title="Similar But Not Exact Match Title",
+                    authors=["Another Author"],
+                    year=2021,
+                    abstract="Abstract",
+                    source="arxiv",
+                    identifier="2101.00001",
+                    url="https://arxiv.org/abs/2101.00001",
+                    pdf_url=None,
+                    published=None,
+                    categories=[],
+                ),
+                backend_used="arxiv",
+                discrepancies=["low author overlap", "year mismatch: 2021 vs 2020"],
+                error=None,
             ),
         ]
 
@@ -286,7 +319,25 @@ class TestBibtexVerifier(unittest.TestCase):
         # Verify it's a Rich Table
         self.assertIsInstance(table, Table)
         # Verify summary caption shows counts
-        self.assertIn("Verified:", str(table.caption))
+        caption_str = str(table.caption)
+        self.assertIn("Verified:", caption_str)
+        self.assertIn("Verified: 1", caption_str)
+        self.assertIn("Uncertain: 1", caption_str)
+        self.assertIn("Suspicious: 1", caption_str)
+
+        # Verify row count (3 data rows)
+        self.assertEqual(len(table.rows), 3)
+
+        # Verify column count (Key, Title, Conf., Tier, Matched, Notes)
+        self.assertEqual(len(table.columns), 6)
+
+        # Verify column headers
+        self.assertEqual(table.columns[0].header, "Key")
+        self.assertEqual(table.columns[1].header, "Title")
+        self.assertEqual(table.columns[2].header, "Conf.")
+        self.assertEqual(table.columns[3].header, "Tier")
+        self.assertEqual(table.columns[4].header, "Matched")
+        self.assertEqual(table.columns[5].header, "Notes")
 
     def test_export_as_table(self):
         """Test export_as_table returns a Rich Table."""

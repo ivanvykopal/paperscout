@@ -341,13 +341,11 @@ class BibtexVerifier:
         table.add_column("Matched", width=35)
         table.add_column("Notes", width=20)
 
-        verified = uncertain = suspicious = errors = 0
+        verified = uncertain = suspicious = 0
 
         for r in results:
             # Count verdicts
-            if r.error:
-                errors += 1
-            elif r.verdict == "verified":
+            if r.verdict == "verified":
                 verified += 1
             elif r.verdict == "uncertain":
                 uncertain += 1
@@ -355,9 +353,7 @@ class BibtexVerifier:
                 suspicious += 1
 
             # Tier emoji
-            if r.error:
-                tier = "⚪ Error"
-            elif r.verdict == "verified":
+            if r.verdict == "verified":
                 tier = "🟢 Verified"
             elif r.verdict == "uncertain":
                 tier = "🟡 Uncertain"
@@ -375,7 +371,12 @@ class BibtexVerifier:
             )
 
             # Notes
-            notes = "; ".join(r.discrepancies[:2]) if r.discrepancies else ("Not found" if r.error and "not found" in r.error else "")
+            if r.error:
+                notes = r.error
+            elif r.discrepancies:
+                notes = "; ".join(r.discrepancies[:2])
+            else:
+                notes = ""
 
             table.add_row(
                 r.bib_key,
@@ -387,7 +388,7 @@ class BibtexVerifier:
             )
 
         # Summary caption
-        summary = f"Verified: {verified} | Uncertain: {uncertain} | Suspicious: {suspicious} | Errors: {errors}"
+        summary = f"Verified: {verified} | Uncertain: {uncertain} | Suspicious: {suspicious}"
         table.caption = summary
         table.caption_style = "dim"
 
