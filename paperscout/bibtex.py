@@ -252,7 +252,7 @@ class BibtexVerifier:
         booktitle = entry.get("BOOKTITLE", "").lower()
 
         # ArXiv eprint
-        if "arxiv:" in eprint or eprint.startswith("10."):
+        if "arxiv:" in eprint:
             return "arxiv", ["acl_anthology", "dblp", "semantic_scholar"]
 
         # ACL Anthology URL

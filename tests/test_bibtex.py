@@ -442,6 +442,40 @@ class TestSmartRouting(unittest.TestCase):
         primary, fallbacks = self.verifier._smart_routing(entry)
         self.assertEqual(primary, "semantic_scholar")
 
+    def test_route_dblp_key(self):
+        """Test routing for DBLP key field."""
+        entry = {"DBLP": "conf/icml/BachC16", "TITLE": "Test"}
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertEqual(primary, "dblp")
+        self.assertIn("semantic_scholar", fallbacks)
+
+    def test_route_acl_booktitle(self):
+        """Test routing for ACL venue in booktitle field."""
+        entry = {
+            "BOOKTITLE": "Proceedings of the 59th Annual Meeting of the ACL",
+            "TITLE": "Test"
+        }
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertEqual(primary, "acl_anthology")
+
+    def test_fallback_backends_content(self):
+        """Verify fallback_backends list contains expected backends."""
+        # Test arxiv route fallbacks
+        entry = {"EPRINT": "arXiv:1706.03762", "TITLE": "Test"}
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertEqual(primary, "arxiv")
+        self.assertIn("acl_anthology", fallbacks)
+        self.assertIn("dblp", fallbacks)
+        self.assertIn("semantic_scholar", fallbacks)
+
+        # Test DOI route fallbacks
+        entry = {"DOI": "10.1234/example", "TITLE": "Test"}
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertEqual(primary, "semantic_scholar")
+        self.assertIn("arxiv", fallbacks)
+        self.assertIn("dblp", fallbacks)
+        self.assertIn("acl_anthology", fallbacks)
+
     def test_route_no_identifiers(self):
         """Test routing when no identifiers present."""
         entry = {"TITLE": "Some Paper Title", "AUTHOR": "John Doe"}
