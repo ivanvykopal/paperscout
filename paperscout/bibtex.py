@@ -119,7 +119,12 @@ class BibtexVerifier:
             with open(path, "r", encoding="latin-1") as f:
                 content = f.read()
 
-        library = bibtexparser.loads(content)
+        try:
+            library = bibtexparser.loads(content)
+        except Exception as e:
+            # Handle malformed BibTeX gracefully
+            raise ValueError(f"Failed to parse BibTeX file: {e}")
+
         entries = []
 
         for entry in library.entries:
@@ -127,7 +132,7 @@ class BibtexVerifier:
             entry_dict = {}
             for key, value in entry.items():
                 entry_dict[key.upper()] = value
-            entry_dict["_KEY"] = entry.get("key", "")
+            entry_dict["ID"] = entry.get("ID", "")
             entries.append(entry_dict)
 
         return entries
