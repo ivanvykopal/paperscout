@@ -202,15 +202,15 @@ class BibtexVerifier:
                         discrepancies = disc
 
                         # Early exit if high confidence
-                        if conf >= 0.8:
+                        if conf >= self.VERIFIED_THRESHOLD:
                             break
             except Exception:
                 continue
 
         # Determine verdict
-        if best_confidence >= 0.8:
+        if best_confidence >= self.VERIFIED_THRESHOLD:
             verdict = "verified"
-        elif best_confidence >= 0.5:
+        elif best_confidence >= self.UNCERTAIN_THRESHOLD:
             verdict = "uncertain"
         else:
             verdict = "suspicious"
@@ -235,28 +235,6 @@ class BibtexVerifier:
             error=error,
             enriched_entry=enriched_entry,
         )
-
-    def _find_discrepancies(self, entry: dict, matched_paper: Paper) -> list[str]:
-        """Find discrepancies between BibTeX entry and matched paper."""
-        discrepancies = []
-
-        # Check year
-        entry_year = entry.get('YEAR')
-        if entry_year and matched_paper.year:
-            try:
-                if int(entry_year) != matched_paper.year:
-                    discrepancies.append(f"Year mismatch: {entry_year} vs {matched_paper.year}")
-            except ValueError:
-                pass
-
-        # Check authors
-        entry_authors = entry.get('AUTHOR', '')
-        if entry_authors:
-            paper_authors_str = " and ".join(matched_paper.authors)
-            if entry_authors.lower() != paper_authors_str.lower():
-                discrepancies.append("Author list differs")
-
-        return discrepancies
 
     def _enrich_entry(self, entry: dict, paper: Paper) -> dict:
         """Enrich a BibTeX entry with metadata from the matched paper."""

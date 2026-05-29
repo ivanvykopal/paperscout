@@ -781,3 +781,81 @@ class TestVerifyEntry(unittest.TestCase):
         self.assertEqual(result.original_title, "Attention Is All You Need")
         self.assertIsInstance(result.confidence, float)
         self.assertIn(result.verdict, ["verified", "uncertain", "suspicious"])
+
+    def test_enrich_entry(self):
+        """Test that _enrich_entry correctly adds DOI, URL, and ABSTRACT fields."""
+        from paperscout.types import Paper
+
+        # Original entry with no DOI, URL, or ABSTRACT
+        entry = {
+            "ID": "testkey",
+            "TITLE": "Test Paper Title",
+            "AUTHOR": "Test Author",
+            "YEAR": "2020",
+        }
+
+        paper = Paper(
+            title="Test Paper Title",
+            authors=["Test Author"],
+            year=2020,
+            abstract="This is the paper abstract.",
+            source="arxiv",
+            identifier="10.1234/test.doi",
+            url="https://arxiv.org/abs/2001.00001",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+
+        enriched = self.verifier._enrich_entry(entry, paper)
+
+        # Verify DOI is added
+        self.assertIn("DOI", enriched)
+        self.assertEqual(enriched["DOI"], "10.1234/test.doi")
+
+        # Verify URL is added
+        self.assertIn("URL", enriched)
+        self.assertEqual(enriched["URL"], "https://arxiv.org/abs/2001.00001")
+
+        # Verify ABSTRACT is added
+        self.assertIn("ABSTRACT", enriched)
+        self.assertEqual(enriched["ABSTRACT"], "This is the paper abstract.")
+
+        # Verify original fields are preserved
+        self.assertEqual(enriched["ID"], "testkey")
+        self.assertEqual(enriched["TITLE"], "Test Paper Title")
+        self.assertEqual(enriched["AUTHOR"], "Test Author")
+        self.assertEqual(enriched["YEAR"], "2020")
+
+    def test_enrich_entry_preserves_existing_fields(self):
+        """Test that _enrich_entry does not overwrite existing DOI, URL, ABSTRACT."""
+        from paperscout.types import Paper
+
+        # Original entry with existing DOI, URL, ABSTRACT
+        entry = {
+            "ID": "testkey",
+            "TITLE": "Test Paper Title",
+            "DOI": "existing.doi",
+            "URL": "https://existing.url",
+            "ABSTRACT": "Existing abstract",
+        }
+
+        paper = Paper(
+            title="Test Paper Title",
+            authors=["Test Author"],
+            year=2020,
+            abstract="This is the paper abstract.",
+            source="arxiv",
+            identifier="10.1234/test.doi",
+            url="https://arxiv.org/abs/2001.00001",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+
+        enriched = self.verifier._enrich_entry(entry, paper)
+
+        # Verify existing fields are preserved (not overwritten)
+        self.assertEqual(enriched["DOI"], "existing.doi")
+        self.assertEqual(enriched["URL"], "https://existing.url")
+        self.assertEqual(enriched["ABSTRACT"], "Existing abstract")
