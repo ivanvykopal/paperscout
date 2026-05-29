@@ -215,8 +215,18 @@ class ACLAnthologyBackend(BaseBackend):
     def _parse_authors(self, authors: Any) -> List[str]:
         if not authors:
             return []
-        if isinstance(authors, list):
-            return [f"{getattr(a, 'first', '')} {getattr(a, 'last', '')}".strip() for a in authors]
+        # Handle both list and tuple (acl-anthology uses tuple)
+        if isinstance(authors, (list, tuple)):
+            result = []
+            for a in authors:
+                first = getattr(a, 'first', None) or ""
+                last = getattr(a, 'last', '')
+                if first:
+                    result.append(f"{first} {last}".strip())
+                else:
+                    result.append(last)
+            return result
+        return []
 
     def _parse_pdf_url(self, paper: Any) -> str:
         web_url = getattr(paper, 'web_url', '')
