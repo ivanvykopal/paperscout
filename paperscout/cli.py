@@ -114,6 +114,43 @@ def main():
         help="Output results as JSON",
     )
 
+    # Verify command
+    verify_parser = subparsers.add_parser("verify", help="Verify BibTeX entries")
+    verify_parser.add_argument(
+        "file",
+        help="Path to .bib file to verify",
+    )
+    verify_parser.add_argument(
+        "-s", "--source",
+        dest="sources",
+        help="Backends to use (comma-separated: arxiv,dblp,etc.)",
+    )
+    verify_parser.add_argument(
+        "--enrich",
+        action="store_true",
+        help="Fill in missing fields from discovered metadata",
+    )
+    verify_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="Confidence threshold for suspicious (default: 0.5)",
+    )
+    verify_parser.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Enable parallel backend queries",
+    )
+    verify_parser.add_argument(
+        "-o", "--output",
+        help="Write annotated .bib to this path",
+    )
+    verify_parser.add_argument(
+        "-j", "--json",
+        dest="json_output",
+        help="Write JSON report to this path",
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -147,6 +184,33 @@ def main():
     elif args.command == "download":
         result = client.download(args.identifier)
         output_results(result, args.output, args.json)
+
+    elif args.command == "verify":
+        client = PaperFinderClient()
+
+        sources = args.sources.split(",") if args.sources else None
+        results = client.verify_bibtex(
+            args.file,
+            sources=sources,
+            enrich=args.enrich,
+            threshold=args.threshold,
+            parallel=args.parallel,
+        )
+
+        # Print console report
+        from paperscout.bibtex import BibtexVerifier
+        verifier = BibtexVerifier()
+        console.print(verifier._format_verification_report(results))
+
+        # Write annotated .bib if requested
+        if args.output:
+            verifier._write_annotated_bibtex(args.file, args.output, results, enrich=args.enrich)
+            console.print(f"[green]Annotated BibTeX written to {args.output}[/green]")
+
+        # Write JSON report if requested
+        if args.json_output:
+            verifier.generate_json_report(args.json_output, results)
+            console.print(f"[green]JSON report written to {args.json_output}[/green]")
 
 
 def output_results(
