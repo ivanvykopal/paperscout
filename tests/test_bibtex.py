@@ -481,3 +481,156 @@ class TestSmartRouting(unittest.TestCase):
         entry = {"TITLE": "Some Paper Title", "AUTHOR": "John Doe"}
         primary, fallbacks = self.verifier._smart_routing(entry)
         self.assertIsNone(primary)  # Will search all backends
+
+
+class TestConfidenceScoring(unittest.TestCase):
+    """Test cases for confidence score calculation."""
+
+    def setUp(self):
+        from paperscout.bibtex import BibtexVerifier
+        self.verifier = BibtexVerifier()
+
+    def test_perfect_match(self):
+        """Test perfect match returns ~1.0."""
+        entry = {
+            "TITLE": "Attention Is All You Need",
+            "AUTHOR": "Vaswani, Ashish",
+            "YEAR": "2017",
+        }
+        paper = Paper(
+            title="Attention Is All You Need",
+            authors=["Ashish Vaswani"],
+            year=2017,
+            abstract=None,
+            source="arxiv",
+            identifier="1706.03762",
+            url="",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+        score, discrepancies = self.verifier._compute_confidence(entry, paper)
+        self.assertGreater(score, 0.9)
+
+    def test_no_match(self):
+        """Test completely different entry returns low score."""
+        entry = {
+            "TITLE": "Quantum Cooking Recipes",
+            "AUTHOR": "Jane Smith",
+            "YEAR": "2025",
+        }
+        paper = Paper(
+            title="Attention Is All You Need",
+            authors=["Ashish Vaswani"],
+            year=2017,
+            abstract=None,
+            source="arxiv",
+            identifier="1706.03762",
+            url="",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+        score, discrepancies = self.verifier._compute_confidence(entry, paper)
+        self.assertLess(score, 0.3)
+
+    def test_year_mismatch(self):
+        """Test year mismatch reduces score."""
+        entry = {
+            "TITLE": "Attention Is All You Need",
+            "AUTHOR": "Vaswani, Ashish",
+            "YEAR": "2018",  # Wrong year
+        }
+        paper = Paper(
+            title="Attention Is All You Need",
+            authors=["Ashish Vaswani"],
+            year=2017,
+            abstract=None,
+            source="arxiv",
+            identifier="1706.03762",
+            url="",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+        score, discrepancies = self.verifier._compute_confidence(entry, paper)
+        self.assertLess(score, 1.0)
+        self.assertGreater(score, 0.7)
+        # Should have year discrepancy noted
+        self.assertTrue(any("year" in d.lower() for d in discrepancies))
+
+    def test_parse_authors_field_single(self):
+        """Test parsing single author in Last, First format."""
+        result = self.verifier._parse_authors_field("Vaswani, Ashish")
+        self.assertEqual(result, ["vaswani"])
+
+    def test_parse_authors_field_multiple(self):
+        """Test parsing multiple authors separated by 'and'."""
+        result = self.verifier._parse_authors_field("Vaswani, Ashish and Shazeer, Noam")
+        self.assertEqual(set(result), {"vaswani", "shazeer"})
+
+    def test_parse_authors_field_empty(self):
+        """Test parsing empty author field."""
+        result = self.verifier._parse_authors_field("")
+        self.assertEqual(result, [])
+
+    def test_compute_author_overlap_perfect(self):
+        """Test perfect author overlap."""
+        entry_authors = ["vaswani", "shazeer"]
+        paper_authors = ["Ashish Vaswani", "Noam Shazeer"]
+        overlap = self.verifier._compute_author_overlap(entry_authors, paper_authors)
+        self.assertEqual(overlap, 1.0)
+
+    def test_compute_author_overlap_partial(self):
+        """Test partial author overlap."""
+        entry_authors = ["vaswani", "shazeer", "parmar"]
+        paper_authors = ["Ashish Vaswani", "Noam Shazeer"]
+        overlap = self.verifier._compute_author_overlap(entry_authors, paper_authors)
+        self.assertEqual(overlap, 2/3)
+
+    def test_compute_author_overlap_none(self):
+        """Test no author overlap."""
+        entry_authors = ["smith", "johnson"]
+        paper_authors = ["Ashish Vaswani", "Noam Shazeer"]
+        overlap = self.verifier._compute_author_overlap(entry_authors, paper_authors)
+        self.assertEqual(overlap, 0.0)
+
+    def test_parse_year_valid(self):
+        """Test parsing valid year."""
+        result = self.verifier._parse_year("2017")
+        self.assertEqual(result, 2017)
+
+    def test_parse_year_with_extra_chars(self):
+        """Test parsing year with extra characters."""
+        result = self.verifier._parse_year("2017-revision")
+        self.assertEqual(result, 2017)
+
+    def test_parse_year_invalid(self):
+        """Test parsing invalid year."""
+        result = self.verifier._parse_year("invalid")
+        self.assertIsNone(result)
+
+    def test_parse_year_empty(self):
+        """Test parsing empty year."""
+        result = self.verifier._parse_year("")
+        self.assertIsNone(result)
+
+    def test_compute_year_score_exact_match(self):
+        """Test exact year match."""
+        score = self.verifier._compute_year_score(2017, 2017)
+        self.assertEqual(score, 1.0)
+
+    def test_compute_year_score_off_by_one(self):
+        """Test year off by one."""
+        score = self.verifier._compute_year_score(2017, 2018)
+        self.assertEqual(score, 0.5)
+
+    def test_compute_year_score_large_gap(self):
+        """Test large year gap."""
+        score = self.verifier._compute_year_score(2017, 2020)
+        self.assertEqual(score, 0.0)
+
+    def test_compute_year_score_missing(self):
+        """Test missing year values."""
+        score = self.verifier._compute_year_score(None, 2017)
+        self.assertEqual(score, 0.5)

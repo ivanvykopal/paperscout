@@ -63,7 +63,10 @@ class DblpBackend(BaseBackend):
             limit=limit
         )
 
-        return [self._format_result(result) for result in results]
+        # Capture the total result count from the API metadata
+        self._last_total = results.get("meta", {}).get("total", 0)
+
+        return [self._format_result(result) for result in results.get("results", [])]
 
     def download(self, identifier: str) -> Dict:
         """

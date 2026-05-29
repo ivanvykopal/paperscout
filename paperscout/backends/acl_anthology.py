@@ -119,6 +119,9 @@ class ACLAnthologyBackend(BaseBackend):
         # Sort by similarity (highest first)
         matching_papers.sort(key=lambda x: x[1], reverse=True)
 
+        # Store the total number of matches before truncation
+        self._last_total = len(matching_papers)
+
         # Return top results with similarity scores
         return matching_papers[:limit]
 

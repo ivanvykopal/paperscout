@@ -326,3 +326,99 @@ class BibtexVerifier:
             )
 
         return table
+
+    def _compute_confidence(self, entry: dict, paper: Paper) -> tuple[float, list[str]]:
+        """
+        Compute confidence score for a paper matching an entry.
+
+        Args:
+            entry: BibTeX entry dictionary.
+            paper: Matched Paper object.
+
+        Returns:
+            Tuple of (confidence_score, list_of_discrepancies).
+        """
+        discrepancies = []
+
+        # Title similarity (40%)
+        entry_title = entry.get("TITLE", "")
+        title_sim = _title_similarity(entry_title, paper.title)
+        title_score = title_sim * 0.40
+
+        # Author overlap (30%)
+        entry_authors = self._parse_authors_field(entry.get("AUTHOR", ""))
+        author_overlap = self._compute_author_overlap(entry_authors, paper.authors)
+        author_score = author_overlap * 0.30
+        if author_overlap < 0.5 and entry_authors:
+            discrepancies.append("low author overlap")
+
+        # Year match (15%)
+        entry_year = self._parse_year(entry.get("YEAR", ""))
+        year_match_score = self._compute_year_score(entry_year, paper.year)
+        year_component = year_match_score * 0.15
+        if entry_year and paper.year and entry_year != paper.year:
+            discrepancies.append(f"year mismatch: {entry_year} vs {paper.year}")
+
+        # Source agreement (15%)
+        source_score = 0.15  # Full credit since we found it in one backend
+
+        total_score = title_score + author_score + year_component + source_score
+
+        return total_score, discrepancies
+
+    def _parse_authors_field(self, author_field: str) -> list[str]:
+        """Parse BibTeX author field into list of last names."""
+        if not author_field:
+            return []
+        # Handle "Last, First and Last, Second" format
+        authors = re.split(r"\s+and\s+", author_field, flags=re.IGNORECASE)
+        result = []
+        for author in authors:
+            author = author.strip()
+            if "," in author:
+                # "Last, First" format
+                parts = author.split(",", 1)
+                result.append(parts[0].strip().lower())  # Just last name
+            else:
+                # "First Last" format
+                parts = author.split()
+                if parts:
+                    result.append(parts[-1].lower())  # Just last name
+        return result
+
+    def _compute_author_overlap(self, entry_authors: list[str], paper_authors: list[str]) -> float:
+        """Compute fraction of entry authors found in paper authors."""
+        if not entry_authors or not paper_authors:
+            return 0.0
+
+        # Extract last names from paper authors
+        paper_last_names = set()
+        for author in paper_authors:
+            parts = author.strip().split()
+            if parts:
+                paper_last_names.add(parts[-1].lower())
+
+        # Count matches
+        matches = sum(1 for a in entry_authors if a in paper_last_names)
+        return matches / len(entry_authors)
+
+    def _parse_year(self, year_field: str) -> int | None:
+        """Parse year from BibTeX year field."""
+        if not year_field:
+            return None
+        try:
+            return int(str(year_field)[:4])
+        except (ValueError, TypeError):
+            return None
+
+    def _compute_year_score(self, entry_year: int | None, paper_year: int | None) -> float:
+        """Compute year match score."""
+        if entry_year is None or paper_year is None:
+            return 0.5  # Neutral if missing
+
+        if entry_year == paper_year:
+            return 1.0
+        elif abs(entry_year - paper_year) <= 1:
+            return 0.5
+        else:
+            return 0.0

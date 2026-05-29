@@ -42,6 +42,7 @@ def format_papers_table(
     papers: list[Paper | dict],
     show_abstract: bool = False,
     show_similarity: bool = True,
+    total_found: int | None = None,
 ) -> Table:
     """Build a Rich table for a list of papers.
 
@@ -49,6 +50,7 @@ def format_papers_table(
         papers: List of Paper objects or dictionaries to display.
         show_abstract: If True, include the abstract column.
         show_similarity: If True, include the similarity score column.
+        total_found: Total results found by the backend (may exceed len(papers)).
 
     Returns:
         A Rich Table.
@@ -98,8 +100,11 @@ def format_papers_table(
             row.append(abstract)
         table.add_row(*row)
 
-    total = len(papers)
-    table.caption = f"Found {total} result(s)"
+    shown = len(papers)
+    if total_found is not None and total_found > shown:
+        table.caption = f"Showing {shown} of {total_found} result(s)"
+    else:
+        table.caption = f"Found {shown} result(s)"
     table.caption_style = "dim"
 
     return table

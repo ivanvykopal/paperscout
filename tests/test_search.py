@@ -47,35 +47,35 @@ class TestPaperSearcher(unittest.TestCase):
 
     def test_search_arxiv_backend_registered(self):
         """Test arxiv backend can be used."""
-        from paper_finder.backends.arxiv import ArxivBackend
+        from paperscout.backends.arxiv import ArxivBackend
         with patch.object(ArxivBackend, 'search', return_value=[]):
             results = self.searcher.search("quantum", source="arxiv", limit=3)
             self.assertIsInstance(results, list)
 
     def test_search_acl_anthology_backend_registered(self):
         """Test acl_anthology backend can be used."""
-        from paper_finder.backends.acl_anthology import ACLAnthologyBackend
+        from paperscout.backends.acl_anthology import ACLAnthologyBackend
         with patch.object(ACLAnthologyBackend, 'search', return_value=[]):
             results = self.searcher.search("attention", source="acl_anthology", limit=3)
             self.assertIsInstance(results, list)
 
     def test_search_dblp_backend_registered(self):
         """Test dblp backend can be used."""
-        from paper_finder.backends.dblp import DblpBackend
+        from paperscout.backends.dblp import DblpBackend
         with patch.object(DblpBackend, 'search', return_value=[]):
             results = self.searcher.search("transformer", source="dblp", limit=3)
             self.assertIsInstance(results, list)
 
     def test_search_s2_backend_registered(self):
         """Test semantic_scholar backend can be used."""
-        from paper_finder.backends.s2cli import SemanticScholarBackend
+        from paperscout.backends.s2cli import SemanticScholarBackend
         with patch.object(SemanticScholarBackend, 'search', return_value=[]):
             results = self.searcher.search("transformer", source="semantic_scholar", limit=3)
             self.assertIsInstance(results, list)
 
     def test_download_method(self):
         """Test download method exists and calls backend."""
-        from paper_finder.backends.arxiv import ArxivBackend
+        from paperscout.backends.arxiv import ArxivBackend
         with patch.object(ArxivBackend, 'download', return_value={"status": "success", "identifier": "test"}):
             result = self.searcher.download("2301.12345", source="arxiv")
             self.assertIn("status", result)
@@ -85,10 +85,10 @@ class TestPaperSearcher(unittest.TestCase):
         """Test searching all backends returns list."""
         # Mock all backends to return empty results
         backends = [
-            'paper_finder.backends.arxiv.ArxivBackend',
-            'paper_finder.backends.dblp.DblpBackend',
-            'paper_finder.backends.s2cli.SemanticScholarBackend',
-            'paper_finder.backends.acl_anthology.ACLAnthologyBackend',
+            'paperscout.backends.arxiv.ArxivBackend',
+            'paperscout.backends.dblp.DblpBackend',
+            'paperscout.backends.s2cli.SemanticScholarBackend',
+            'paperscout.backends.acl_anthology.ACLAnthologyBackend',
         ]
         with patch(backends[0], autospec=True) as mock_arxiv, \
              patch(backends[1], autospec=True) as mock_dblp, \

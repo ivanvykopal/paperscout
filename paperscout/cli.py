@@ -137,7 +137,12 @@ def main():
         results = client.search(
             args.query, source=args.source, limit=args.limit
         )
-        output_results(results, args.output, args.json, show_abstract=args.abstract, show_similarity=not args.no_similarity)
+        output_results(
+            results, args.output, args.json,
+            show_abstract=args.abstract,
+            show_similarity=not args.no_similarity,
+            total_found=client.last_search_total,
+        )
 
     elif args.command == "download":
         result = client.download(args.identifier)
@@ -145,14 +150,24 @@ def main():
 
 
 def output_results(
-    data, output_file: Optional[str] = None, as_json: bool = False, show_abstract: bool = False, show_similarity: bool = True
+    data,
+    output_file: Optional[str] = None,
+    as_json: bool = False,
+    show_abstract: bool = False,
+    show_similarity: bool = True,
+    total_found: int | None = None,
 ):
     """Output results to file or stdout."""
     if as_json:
         output = json.dumps(data, indent=2)
     else:
         if isinstance(data, list):
-            output = format_papers_table(data, show_abstract=show_abstract, show_similarity=show_similarity)
+            output = format_papers_table(
+                data,
+                show_abstract=show_abstract,
+                show_similarity=show_similarity,
+                total_found=total_found,
+            )
         else:
             output = format_paper_detail(data)
 

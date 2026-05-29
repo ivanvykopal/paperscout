@@ -72,6 +72,11 @@ class ArxivBackend(BaseBackend):
             sort_order=sort_order,
         )
 
+        # Capture the total result count from the API metadata
+        meta = papers.meta
+        if meta is not None:
+            self._last_total = meta.total_results if hasattr(meta, "total_results") else meta.get("total_results", 0)
+
         return [self._format_result(result) for result in papers.results]
 
     def download(self, identifier: str) -> Dict:

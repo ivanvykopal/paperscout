@@ -68,6 +68,7 @@ class PaperSearcher:
     def __init__(self):
         """Initialize the paper searcher with available backends."""
         self._backends: Dict[str, BaseBackend] = {}
+        self._last_total: int = 0
 
     def search(
         self,
@@ -106,12 +107,30 @@ class PaperSearcher:
                 combined_results = self._combine_results(original_results, expanded_results)
             else:
                 combined_results = backend.search(query, limit=limit, **kwargs)
-            
+
+            # Capture the total result count from the backend if available
+            self._last_total = getattr(backend, "_last_total", 0)
+
             for result in combined_results:
                 new_similarity = _title_similarity(query, result.title)
                 if result.similarity is None or result.similarity < new_similarity:
                     result.similarity = new_similarity
+
+            # Sort by similarity (highest first)
+            combined_results.sort(key=lambda p: -(p.similarity or 0))
+
+            # If exact match first is enabled, move exact matches to top
+            if exact_match_first:
+                exact_matches = [r for r in combined_results if (r.similarity or 0) == 1.0]
+                similar_matches = [r for r in combined_results if (r.similarity or 0) < 1.0]
+                combined_results = exact_matches + similar_matches
+
             return combined_results
+
+    @property
+    def last_search_total(self) -> int:
+        """The total number of results found by the last search (across all backends)."""
+        return self._last_total
 
     def _search_all_backends(
         self,
@@ -135,6 +154,7 @@ class PaperSearcher:
             List of Paper objects from all backends, sorted by similarity.
         """
         all_results: List[Paper] = []
+        total_found = 0
 
         for source_name, backend_class in self.BACKENDS.items():
             try:
@@ -142,6 +162,8 @@ class PaperSearcher:
                 original_results = backend.search(query, limit=limit, **kwargs)
                 expanded_results = backend.search(expanded_query, limit=limit, **kwargs)
                 combined = self._combine_results(original_results, expanded_results)
+
+                total_found += getattr(backend, "_last_total", 0)
 
                 for result in combined:
                     result.source = source_name
@@ -152,6 +174,8 @@ class PaperSearcher:
 
             except Exception as e:
                 continue
+
+        self._last_total = total_found
 
         if not all_results:
             return []

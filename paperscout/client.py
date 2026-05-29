@@ -43,6 +43,13 @@ class PaperFinderClient:
             self._downloader = PaperDownloader()
         return self._downloader
 
+    @property
+    def last_search_total(self) -> int:
+        """The total number of results found by the last search (across all backends)."""
+        if self._searcher is None:
+            return 0
+        return self._searcher.last_search_total
+
     def search(
         self,
         query: str,

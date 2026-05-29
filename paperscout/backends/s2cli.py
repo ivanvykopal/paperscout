@@ -27,15 +27,31 @@ class SemanticScholarBackend(BaseBackend):
     name: str = "semantic_scholar"
     supported_sources: List[str] = ["semantic_scholar", "Semantic Scholar"]
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        max_retries: int = 5,
+        max_retry_wait: int = 120,
+        retry_enabled: bool = True,
+    ):
         """
         Initialize the Semantic Scholar backend.
 
         Args:
-            api_key: Optional API key (not typically required for arXiv).
+            api_key: Semantic Scholar API key for higher rate limits
+                     (100 req/s with key vs 1 req/s without).
+                     Can also be set via the S2_API_KEY environment variable.
+            max_retries: Maximum number of retry attempts on rate limits (default 5).
+            max_retry_wait: Maximum seconds to wait for any single retry (default 120).
+            retry_enabled: Whether to automatically retry on rate limits.
         """
         super().__init__(api_key)
-        self.client = SemanticScholarAPI(api_key=api_key)
+        self.client = SemanticScholarAPI(
+            api_key=api_key,
+            max_retries=max_retries,
+            max_retry_wait=max_retry_wait,
+            retry_enabled=retry_enabled,
+        )
         self.download_dir = Path(tempfile.gettempdir()) / "paperscout" / "s2cli"
         self.download_dir.mkdir(parents=True, exist_ok=True)
         if not S2CLI_AVAILABLE:
@@ -66,7 +82,10 @@ class SemanticScholarBackend(BaseBackend):
             limit=limit
         )
 
-        return [self._format_result(result) for result in results]
+        # Capture the total result count from the API metadata
+        self._last_total = results.get("total", 0)
+
+        return [self._format_result(result) for result in results.get("data", [])]
 
     def download(self, identifier: str) -> Dict:
         """
@@ -108,9 +127,17 @@ class SemanticScholarBackend(BaseBackend):
         Returns:
             Paper object.
         """
+        # S2 returns authors as [{"authorId": "...", "name": "..."}]
+        raw_authors = result.get("authors", [])
+        authors = (
+            [a.get("name", "").strip() for a in raw_authors if isinstance(a, dict)]
+            if raw_authors and isinstance(raw_authors[0], dict)
+            else raw_authors
+        )
+
         return Paper(
             title=result.get("title", "").strip(),
-            authors=result.get("authors", []),
+            authors=authors,
             year=int(result.get("year", 0)) if result.get("year") else None,
             abstract=result.get("abstract", "").strip(),
             source="semantic_scholar",
