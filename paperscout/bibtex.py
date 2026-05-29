@@ -102,18 +102,35 @@ class BibtexVerifier:
         return results
 
     def _parse_bibtex(self, path: str) -> list[dict]:
-        """Parse a BibTeX file into a list of entry dictionaries."""
+        """
+        Parse a BibTeX file into a list of entry dictionaries.
+
+        Args:
+            path: Path to the .bib file.
+
+        Returns:
+            List of entry dictionaries. Keys are uppercase (e.g., "TITLE", "AUTHOR").
+        """
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            # Fallback to latin-1
+            with open(path, "r", encoding="latin-1") as f:
                 content = f.read()
 
-            if not content.strip():
-                return []
+        library = bibtexparser.loads(content)
+        entries = []
 
-            db = bibtexparser.parse_string(content)
-            return db.entries
-        except Exception:
-            return []
+        for entry in library.entries:
+            # Convert to dict with uppercase keys
+            entry_dict = {}
+            for key, value in entry.items():
+                entry_dict[key.upper()] = value
+            entry_dict["_KEY"] = entry.get("key", "")
+            entries.append(entry_dict)
+
+        return entries
 
     def _verify_entry(
         self,

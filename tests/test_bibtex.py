@@ -291,3 +291,70 @@ class TestBibtexVerifier(unittest.TestCase):
         self.assertEqual(table.title, "BibTeX Verification Results")
         # Check columns exist
         self.assertEqual(len(table.columns), 5)
+
+
+class TestBibtexParsing(unittest.TestCase):
+    """Test cases for BibTeX parsing functions."""
+
+    def test_parse_valid_bibtex(self):
+        """Test parsing a valid .bib file."""
+        from paperscout.bibtex import BibtexVerifier
+        import tempfile
+        import os
+
+        verifier = BibtexVerifier()
+        bib_content = '''
+@article{vaswani2017attention,
+  title={Attention Is All You Need},
+  author={Vaswani, Ashish and Shazeer, Noam},
+  year={2017}
+}
+'''
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.bib', delete=False) as f:
+            f.write(bib_content)
+            temp_path = f.name
+
+        try:
+            entries = verifier._parse_bibtex(temp_path)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["TITLE"], "Attention Is All You Need")
+        finally:
+            os.unlink(temp_path)
+
+    def test_parse_empty_file(self):
+        """Test parsing an empty file."""
+        from paperscout.bibtex import BibtexVerifier
+        import tempfile
+        import os
+
+        verifier = BibtexVerifier()
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.bib', delete=False) as f:
+            f.write("")
+            temp_path = f.name
+
+        try:
+            entries = verifier._parse_bibtex(temp_path)
+            self.assertEqual(len(entries), 0)
+        finally:
+            os.unlink(temp_path)
+
+    def test_parse_multiple_entries(self):
+        """Test parsing multiple entries."""
+        from paperscout.bibtex import BibtexVerifier
+        import tempfile
+        import os
+
+        verifier = BibtexVerifier()
+        bib_content = '''
+@article{a, title={A}, author={A}, year={2020}}
+@inproceedings{b, title={B}, author={B}, year={2021}}
+'''
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.bib', delete=False) as f:
+            f.write(bib_content)
+            temp_path = f.name
+
+        try:
+            entries = verifier._parse_bibtex(temp_path)
+            self.assertEqual(len(entries), 2)
+        finally:
+            os.unlink(temp_path)
