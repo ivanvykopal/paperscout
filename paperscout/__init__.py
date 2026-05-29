@@ -13,6 +13,7 @@ from paperscout.backends.dblp import DblpBackend
 from paperscout.backends.s2cli import SemanticScholarBackend
 from paperscout.backends.acl_anthology import ACLAnthologyBackend
 from paperscout.types import Paper
+from paperscout.bibtex import BibtexVerifier, VerificationResult
 
 __version__ = "0.1.2"
 __author__ = "Ivan Vykopal"
@@ -27,4 +28,6 @@ __all__ = [
     "SemanticScholarBackend",
     "ACLAnthologyBackend",
     "Paper",
+    "BibtexVerifier",
+    "VerificationResult",
 ]
