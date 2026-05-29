@@ -143,53 +143,96 @@ class BibtexVerifier:
         sources: list[str] | None,
         enrich: bool,
     ) -> VerificationResult:
-        """Verify a single BibTeX entry."""
-        bib_key = entry.get('ID', '')
-        title = entry.get('TITLE', '')
+        """
+        Verify a single BibTeX entry.
 
-        # Search for matching paper
-        results = self.searcher.search(query=title, source=sources, limit=1)
+        Args:
+            entry: BibTeX entry dictionary.
+            sources: Specific backends to use.
+            enrich: Whether to enrich the entry.
 
-        if not results:
+        Returns:
+            VerificationResult.
+        """
+        bib_key = entry.get("ID", "unknown")
+        title = entry.get("TITLE", "")
+
+        if not title:
             return VerificationResult(
                 bib_key=bib_key,
-                original_title=title,
+                original_title="",
                 confidence=0.0,
                 verdict="suspicious",
                 matched_paper=None,
                 backend_used=None,
-                discrepancies=["No matching paper found"],
-                error=None,
-                enriched_entry=None,
+                discrepancies=["no title"],
+                error="Entry has no title",
             )
 
-        best_match = results[0]
+        # Smart routing
+        primary, fallbacks = self._smart_routing(entry)
 
-        # Compute confidence using comprehensive scoring
-        confidence, discrepancies = self._compute_confidence(entry, best_match)
+        # Build search sources list
+        if sources:
+            search_sources = sources
+        elif primary:
+            search_sources = [primary] + fallbacks
+        else:
+            search_sources = ["all"]
 
-        # Determine verdict based on confidence
-        if confidence >= self.VERIFIED_THRESHOLD:
+        # Search for the paper
+        best_paper: Paper | None = None
+        best_source: str | None = None
+        best_confidence = 0.0
+        discrepancies: list[str] = []
+
+        for source in search_sources:
+            try:
+                papers = self.searcher.search(title, source=source, limit=5)
+                if not papers:
+                    continue
+
+                # Find best match
+                for paper in papers:
+                    conf, disc = self._compute_confidence(entry, paper)
+                    if conf > best_confidence:
+                        best_confidence = conf
+                        best_paper = paper
+                        best_source = source
+                        discrepancies = disc
+
+                        # Early exit if high confidence
+                        if conf >= 0.8:
+                            break
+            except Exception:
+                continue
+
+        # Determine verdict
+        if best_confidence >= 0.8:
             verdict = "verified"
-        elif confidence >= self.UNCERTAIN_THRESHOLD:
+        elif best_confidence >= 0.5:
             verdict = "uncertain"
         else:
             verdict = "suspicious"
 
-        # Enrich entry if requested
+        # Enrich if requested
         enriched_entry = None
-        if enrich and best_match:
-            enriched_entry = self._enrich_entry(entry, best_match)
+        if enrich and best_paper:
+            enriched_entry = self._enrich_entry(entry, best_paper)
+
+        error = None
+        if not best_paper:
+            error = "not found in any backend"
 
         return VerificationResult(
             bib_key=bib_key,
             original_title=title,
-            confidence=confidence,
+            confidence=best_confidence,
             verdict=verdict,
-            matched_paper=best_match,
-            backend_used=best_match.source,
+            matched_paper=best_paper,
+            backend_used=best_source,
             discrepancies=discrepancies,
-            error=None,
+            error=error,
             enriched_entry=enriched_entry,
         )
 
@@ -215,21 +258,18 @@ class BibtexVerifier:
 
         return discrepancies
 
-    def _enrich_entry(self, entry: dict, matched_paper: Paper) -> dict:
+    def _enrich_entry(self, entry: dict, paper: Paper) -> dict:
         """Enrich a BibTeX entry with metadata from the matched paper."""
         enriched = entry.copy()
 
-        # Update fields from matched paper
-        if matched_paper.title:
-            enriched['TITLE'] = matched_paper.title
-        if matched_paper.authors:
-            enriched['AUTHOR'] = " and ".join(matched_paper.authors)
-        if matched_paper.year:
-            enriched['YEAR'] = str(matched_paper.year)
-        if matched_paper.abstract:
-            enriched['ABSTRACT'] = matched_paper.abstract
-        if matched_paper.url:
-            enriched['URL'] = matched_paper.url
+        if not enriched.get("DOI") and paper.identifier:
+            enriched["DOI"] = paper.identifier
+
+        if not enriched.get("URL") and paper.url:
+            enriched["URL"] = paper.url
+
+        if not enriched.get("ABSTRACT") and paper.abstract:
+            enriched["ABSTRACT"] = paper.abstract
 
         return enriched
 
