@@ -323,6 +323,76 @@ class BibtexVerifier:
 
         return "\n".join(lines)
 
+    def _format_verification_report(self, results: list[VerificationResult]) -> Table:
+        """
+        Format verification results as a Rich table.
+
+        Args:
+            results: Verification results.
+
+        Returns:
+            Rich Table.
+        """
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Key", style="dim", width=15)
+        table.add_column("Title", width=40)
+        table.add_column("Conf.", justify="right", width=8)
+        table.add_column("Tier", width=10)
+        table.add_column("Matched", width=35)
+        table.add_column("Notes", width=20)
+
+        verified = uncertain = suspicious = errors = 0
+
+        for r in results:
+            # Count verdicts
+            if r.error:
+                errors += 1
+            elif r.verdict == "verified":
+                verified += 1
+            elif r.verdict == "uncertain":
+                uncertain += 1
+            else:
+                suspicious += 1
+
+            # Tier emoji
+            if r.error:
+                tier = "⚪ Error"
+            elif r.verdict == "verified":
+                tier = "🟢 Verified"
+            elif r.verdict == "uncertain":
+                tier = "🟡 Uncertain"
+            else:
+                tier = "🔴 Suspicious"
+
+            # Truncate title
+            title = r.original_title[:37] + "..." if len(r.original_title) > 40 else r.original_title
+
+            # Matched title
+            matched = (
+                r.matched_paper.title[:32] + "..."
+                if r.matched_paper and len(r.matched_paper.title) > 35
+                else (r.matched_paper.title if r.matched_paper else "—")
+            )
+
+            # Notes
+            notes = "; ".join(r.discrepancies[:2]) if r.discrepancies else ("Not found" if r.error and "not found" in r.error else "")
+
+            table.add_row(
+                r.bib_key,
+                title,
+                f"{r.confidence:.0%}" if r.confidence > 0 else "—",
+                tier,
+                matched,
+                notes,
+            )
+
+        # Summary caption
+        summary = f"Verified: {verified} | Uncertain: {uncertain} | Suspicious: {suspicious} | Errors: {errors}"
+        table.caption = summary
+        table.caption_style = "dim"
+
+        return table
+
     def export_as_table(self, results: list[VerificationResult]) -> Table:
         """Export verification results as a Rich Table."""
         table = Table(title="BibTeX Verification Results")

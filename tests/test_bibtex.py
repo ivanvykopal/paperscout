@@ -252,6 +252,42 @@ class TestBibtexVerifier(unittest.TestCase):
         self.assertIn("0.95", report)
         self.assertIn("0.40", report)
 
+    def test_format_verification_report(self):
+        """Test formatting verification results as Rich table."""
+        from paperscout.bibtex import BibtexVerifier, VerificationResult
+        from rich.table import Table
+
+        verifier = BibtexVerifier()
+        results = [
+            VerificationResult(
+                bib_key="test2020",
+                original_title="Test Paper",
+                confidence=0.95,
+                verdict="verified",
+                matched_paper=None,
+                backend_used="arxiv",
+                discrepancies=[],
+                error=None,
+            ),
+            VerificationResult(
+                bib_key="fake2025",
+                original_title="Fake Quantum Paper",
+                confidence=0.1,
+                verdict="suspicious",
+                matched_paper=None,
+                backend_used=None,
+                discrepancies=[],
+                error="not found",
+            ),
+        ]
+
+        table = verifier._format_verification_report(results)
+
+        # Verify it's a Rich Table
+        self.assertIsInstance(table, Table)
+        # Verify summary caption shows counts
+        self.assertIn("Verified:", str(table.caption))
+
     def test_export_as_table(self):
         """Test export_as_table returns a Rich Table."""
         from paperscout.bibtex import BibtexVerifier, VerificationResult
