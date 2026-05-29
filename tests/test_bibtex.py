@@ -1129,3 +1129,40 @@ class TestAnnotatedOutput(unittest.TestCase):
         # Note: In a future enhancement, when enrich=True, the output could include
         # the enriched fields (DOI, URL) directly in the BibTeX entry rather than
         # just as comment annotations
+
+    def test_generate_json_report(self):
+        """Test generating JSON verification report."""
+        from paperscout.bibtex import BibtexVerifier, VerificationResult
+        import tempfile
+        import os
+        import json
+
+        verifier = BibtexVerifier()
+        results = [
+            VerificationResult(
+                bib_key="test2020",
+                original_title="Test Paper",
+                confidence=0.95,
+                verdict="verified",
+                matched_paper=None,
+                backend_used="arxiv",
+                discrepancies=[],
+                error=None,
+            )
+        ]
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json_path = f.name
+
+        try:
+            verifier._generate_json_report(json_path, results)
+
+            with open(json_path, 'r') as f:
+                report = json.load(f)
+
+            self.assertEqual(len(report), 1)
+            self.assertEqual(report[0]["bib_key"], "test2020")
+            self.assertEqual(report[0]["verdict"], "verified")
+            self.assertAlmostEqual(report[0]["confidence"], 0.95, places=2)
+        finally:
+            os.unlink(json_path)
