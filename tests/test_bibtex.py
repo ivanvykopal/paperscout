@@ -871,6 +871,13 @@ class TestAnnotatedOutput(unittest.TestCase):
         self.VerificationResult = VerificationResult
         self.temp_dir = tempfile.mkdtemp()
 
+    def tearDown(self):
+        """Clean up temporary files after each test."""
+        import os
+        import shutil
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
     def test_write_annotated_bibtex(self):
         """Test writing annotated BibTeX file."""
         import os
@@ -1058,3 +1065,67 @@ class TestAnnotatedOutput(unittest.TestCase):
         # Both entries should be present
         self.assertIn("@article{entry1", output)
         self.assertIn("@inproceedings{entry2", output)
+
+    def test_write_annotated_bibtex_enrich(self):
+        """Test that enrich=True parameter is documented (current behavior: not used in output).
+
+        This test documents the current limitation where the enrich parameter is accepted
+        but not utilized. When enriched_entry data is available in VerificationResult,
+        it should be used to add metadata fields to the output BibTeX entries when enrich=True.
+        """
+        import os
+        from paperscout.types import Paper
+
+        bib_content = '''@article{test2023,
+  title={Test Paper},
+  author={Doe, John},
+  year={2023}
+}'''
+
+        input_path = os.path.join(self.temp_dir, "test_enrich.bib")
+        output_path = os.path.join(self.temp_dir, "test_enrich.out.bib")
+
+        with open(input_path, 'w') as f:
+            f.write(bib_content)
+
+        matched_paper = Paper(
+            title="Test Paper Verified",
+            authors=["John Doe"],
+            year=2023,
+            abstract="Test abstract for enrichment.",
+            source="arxiv",
+            identifier="10.1234/test.doi",
+            url="https://arxiv.org/abs/2301.00001",
+            pdf_url=None,
+            published=None,
+            categories=[],
+        )
+
+        results = [
+            self.VerificationResult(
+                bib_key="test2023",
+                original_title="Test Paper",
+                confidence=0.95,
+                verdict="verified",
+                matched_paper=matched_paper,
+                backend_used="arxiv",
+                discrepancies=[],
+                error=None,
+                enriched_entry={"TITLE": "Test Paper", "DOI": "10.1234/test.doi", "URL": "https://arxiv.org/abs/2301.00001"},
+            )
+        ]
+
+        # Call with enrich=True - currently this doesn't change output behavior
+        # but the parameter should be acknowledged
+        self.verifier._write_annotated_bibtex(input_path, output_path, results, enrich=True)
+
+        with open(output_path, 'r') as f:
+            output = f.read()
+
+        # Verify annotations are still written (current behavior)
+        self.assertIn("% verification_status: verified", output)
+        self.assertIn("@article{test2023", output)
+
+        # Note: In a future enhancement, when enrich=True, the output could include
+        # the enriched fields (DOI, URL) directly in the BibTeX entry rather than
+        # just as comment annotations

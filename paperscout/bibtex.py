@@ -454,7 +454,12 @@ class BibtexVerifier:
             input_path: Path to original .bib file.
             output_path: Path to output .bib file.
             results: Verification results.
-            enrich: Whether to include enriched fields.
+            enrich: Whether to include enriched fields. Note: Currently this parameter
+                is accepted but not used in the annotation output. When enrich=True,
+                the enriched_entry data from VerificationResult should be used to add
+                metadata (DOI, URL, ABSTRACT) to the output BibTeX entries. This would
+                require modifying the output logic to write the enriched entries instead
+                of just adding comment annotations.
         """
         # Read original content
         with open(input_path, "r", encoding="utf-8") as f:
@@ -468,8 +473,8 @@ class BibtexVerifier:
         output_lines = []
 
         for line in lines:
-            # Check if this line starts a new entry
-            match = re.match(r"^(@\w+)\{(\w+)", line)
+            # Check if this line starts a new entry (handle optional leading whitespace)
+            match = re.match(r"^\s*(@\w+)\{(\w+)", line)
             if match:
                 entry_key = match.group(2)
 
