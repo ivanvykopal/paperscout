@@ -415,3 +415,35 @@ class TestBibtexParsing(unittest.TestCase):
             self.assertIsInstance(entries, list)
         finally:
             os.unlink(temp_path)
+
+
+class TestSmartRouting(unittest.TestCase):
+    """Test cases for smart backend routing."""
+
+    def setUp(self):
+        from paperscout.bibtex import BibtexVerifier
+        self.verifier = BibtexVerifier()
+
+    def test_route_arxiv_eprint(self):
+        """Test routing for arXiv eprint field."""
+        entry = {"EPRINT": "arXiv:1706.03762", "TITLE": "Test"}
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertEqual(primary, "arxiv")
+
+    def test_route_acl_url(self):
+        """Test routing for ACL anthology URL."""
+        entry = {"URL": "https://aclanthology.org/P20-1001", "TITLE": "Test"}
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertEqual(primary, "acl_anthology")
+
+    def test_route_doi(self):
+        """Test routing for DOI field."""
+        entry = {"DOI": "10.1234/example", "TITLE": "Test"}
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertEqual(primary, "semantic_scholar")
+
+    def test_route_no_identifiers(self):
+        """Test routing when no identifiers present."""
+        entry = {"TITLE": "Some Paper Title", "AUTHOR": "John Doe"}
+        primary, fallbacks = self.verifier._smart_routing(entry)
+        self.assertIsNone(primary)  # Will search all backends

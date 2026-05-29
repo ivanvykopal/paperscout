@@ -234,6 +234,47 @@ class BibtexVerifier:
 
         return enriched
 
+    def _smart_routing(self, entry: dict) -> tuple[str | None, list[str]]:
+        """
+        Determine which backends to search based on entry fields.
+
+        Args:
+            entry: BibTeX entry dictionary.
+
+        Returns:
+            Tuple of (primary_backend, fallback_backends).
+            If primary is None, search all backends.
+        """
+        eprint = entry.get("EPRINT", "").lower()
+        url = entry.get("URL", "").lower()
+        doi = entry.get("DOI", "")
+        dblp_key = entry.get("DBLP", "") or entry.get("DBLPKEY", "")
+        booktitle = entry.get("BOOKTITLE", "").lower()
+
+        # ArXiv eprint
+        if "arxiv:" in eprint or eprint.startswith("10."):
+            return "arxiv", ["acl_anthology", "dblp", "semantic_scholar"]
+
+        # ACL Anthology URL
+        if "aclanthology" in url or "aclweb" in url:
+            return "acl_anthology", ["semantic_scholar"]
+
+        # DBLP key
+        if dblp_key:
+            return "dblp", ["semantic_scholar"]
+
+        # DOI - Semantic Scholar handles DOI lookup well
+        if doi:
+            return "semantic_scholar", ["arxiv", "dblp", "acl_anthology"]
+
+        # ACL venue in booktitle
+        acl_venues = ["acl", "emnlp", "naacl", "coling", "acl-iit"]
+        if any(venue in booktitle for venue in acl_venues):
+            return "acl_anthology", ["arxiv", "dblp", "semantic_scholar"]
+
+        # No identifiable fields - search all
+        return None, []
+
     def format_report(self, results: list[VerificationResult]) -> str:
         """Format verification results as a human-readable report."""
         lines = []
