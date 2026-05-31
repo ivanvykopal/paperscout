@@ -39,6 +39,10 @@ class ACLAnthologyBackend(BaseBackend):
             api_key: Optional API key (not typically required for ACL Anthology).
         """
         super().__init__(api_key)
+        if not ACL_ANTHOLOGY_AVAILABLE:
+            raise ImportError(
+                "acl-anthology is not installed. Install it with: pip install acl-anthology"
+            )
         self.client = Anthology.from_repo()
         self.download_dir = Path(tempfile.gettempdir()) / "paperscout" / "acl_anthology"
         self.download_dir.mkdir(parents=True, exist_ok=True)
@@ -58,11 +62,6 @@ class ACLAnthologyBackend(BaseBackend):
         Returns:
             List of Paper objects.
         """
-        if not ACL_ANTHOLOGY_AVAILABLE:
-            raise ImportError(
-                "acl-anthology is not installed. Install it with: pip install acl-anthology"
-            )
-
         # Search by iterating through all papers and filtering by title
         results = self._search(query, limit=limit)
 
@@ -141,11 +140,6 @@ class ACLAnthologyBackend(BaseBackend):
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        if not ACL_ANTHOLOGY_AVAILABLE:
-            raise ImportError(
-                "acl-anthology is not installed. Install it with: pip install acl-anthology"
-            )
-
         # Get paper by ID
         try:
             paper = self.client.get(identifier)
@@ -169,7 +163,7 @@ class ACLAnthologyBackend(BaseBackend):
                 "message": f"No PDF URL found for paper {identifier}.",
             }
 
-        path, filename = self._download_file(pdf_url, identifier)
+        path, filename = self._download_file(pdf_url, identifier, output_path)
 
         return {
             "status": "success",
@@ -236,21 +230,77 @@ class ACLAnthologyBackend(BaseBackend):
             return web_url + '.pdf'
         return ""
 
-    def _download_file(self, url: str, identifier: str) -> Tuple[str, str]:
+    def download_by_doi(self, doi: str, output_dir: Optional[str] = None) -> Dict:
+        """
+        Download a paper from ACL Anthology by DOI.
+
+        Args:
+            doi: Digital Object Identifier (e.g., '10.18653/v1/P18-1001').
+            output_dir: Directory to save the PDF.
+
+        Returns:
+            Dictionary with download information.
+        """
+        save_dir = Path(output_dir) if output_dir else self.download_dir
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            # ACL Anthology papers can be looked up by DOI
+            paper = self.client.get(doi)
+        except Exception:
+            return {
+                "status": "error",
+                "message": f"Failed to retrieve paper by DOI '{doi}' from ACL Anthology.",
+            }
+
+        if not paper:
+            return {
+                "status": "error",
+                "message": f"Paper with DOI '{doi}' not found in ACL Anthology.",
+            }
+
+        pdf_url = getattr(paper, 'pdf', None)
+        if not pdf_url:
+            return {
+                "status": "error",
+                "message": f"No PDF URL found for paper with DOI '{doi}'.",
+            }
+
+        try:
+            paper_id = str(getattr(paper, 'id', doi.replace("/", "_")))
+            path, filename = self._download_file(str(pdf_url), paper_id)
+            return {
+                "status": "success",
+                "identifier": doi,
+                "path": path,
+                "filename": filename,
+                "title": str(getattr(paper, 'title', '')),
+                "authors": self._parse_authors(getattr(paper, 'authors', [])),
+                "source": "acl_anthology",
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to download PDF: {str(e)}",
+            }
+
+    def _download_file(self, url: str, identifier: str, save_dir: Optional[Path] = None) -> Tuple[str, str]:
         """
         Download a file from a URL and save it to the download directory.
 
         Args:
             url: URL of the file to download.
             identifier: Identifier for naming the downloaded file.
+            save_dir: Directory to save the file (defaults to self.download_dir).
 
         Returns:
             Tuple of (file path, filename).
         """
         import requests
 
+        target_dir = save_dir if save_dir else self.download_dir
         filename = f"{identifier.replace('/', '_')}.pdf"
-        path = self.download_dir / filename
+        path = target_dir / filename
 
         try:
             response = requests.get(url, timeout=30)

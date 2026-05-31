@@ -79,17 +79,24 @@ class ArxivBackend(BaseBackend):
 
         return [self._format_result(result) for result in papers.results]
 
-    def download(self, identifier: str) -> Dict:
+    def download(self, identifier: str, output_dir: Optional[str] = None) -> Dict:
         """
         Download a paper from arXiv.
 
         Args:
             identifier: arXiv ID (e.g., '2301.12345' or 'arXiv:2301.12345').
+            output_dir: Directory to save the PDF (defaults to temp dir).
 
         Returns:
             Dictionary with download information including path.
         """
-        paper = self.client.get_paper(identifier)
+        save_dir = Path(output_dir) if output_dir else self.download_dir
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        # Strip the 'arXiv:' prefix if present - arxivy expects just the numeric ID
+        arxiv_id = identifier.replace("arXiv:", "").replace("arxiv:", "")
+
+        paper = self.client.get_paper(arxiv_id)
         if not paper:
             return {"status": "error", "message": f"Paper with ID {identifier} not found."}
 
@@ -97,8 +104,8 @@ class ArxivBackend(BaseBackend):
         pdf_url = paper.pdf_url
         if not pdf_url:
             return {"status": "error", "message": f"No PDF URL found for paper with ID {identifier}."}
-        
-        path, filename = self._download_file(pdf_url, identifier)
+
+        path, filename = self._download_file(pdf_url, arxiv_id, save_dir)
 
         return {
             "status": "success",
@@ -133,20 +140,21 @@ class ArxivBackend(BaseBackend):
             similarity=None,
         )
     
-    def _download_file(self, url: str, identifier: str) -> Tuple[str, str]:
+    def _download_file(self, url: str, identifier: str, save_dir: Optional[Path] = None) -> Tuple[str, str]:
         """
         Download a file from a URL and save it to the download directory.
 
         Args:
             url: URL of the file to download.
             identifier: Identifier for naming the downloaded file.
+            save_dir: Directory to save the file (defaults to self.download_dir).
         Returns:
             Tuple of (file path, filename).
         """
+        target_dir = save_dir if save_dir else self.download_dir
         filename = f"{identifier.replace('/', '_')}.pdf"
-        path = self.download_dir / filename
+        path = target_dir / filename
         try:
-            # do now use arxivy to download
             import requests
             response = requests.get(url)
             response.raise_for_status()

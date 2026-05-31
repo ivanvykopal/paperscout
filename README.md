@@ -102,14 +102,25 @@ paperscout match "query" --json
 
 ### Download Paper
 
+The identifier type is auto-detected — no need to specify `--source`:
+
 ```bash
-# Download by arXiv ID
+# Download by arXiv ID (auto-detected)
 paperscout download arXiv:2301.12345
 
-# Download by DOI
-paperscout download 10.1234/example.doi
+# Download by bare arXiv ID
+paperscout download 2301.12345
 
-# Specify output directory
+# Download by DOI (auto-detected, tries multiple backends)
+paperscout download 10.18653/v1/P18-1001
+
+# Download by ACL Anthology ID
+paperscout download P18-1001
+
+# Specify source explicitly (if needed)
+paperscout download P18-1001 --source acl_anthology
+
+# Specify output directory for the PDF
 paperscout download arXiv:2301.12345 --output ./papers
 
 # JSON output
@@ -134,8 +145,10 @@ for paper in results:
 # Search specific source only
 results = client.search("Transformer", source="arxiv", limit=5)
 
-# Download a paper
+# Download a paper (identifier type auto-detected)
 client.download("arXiv:2301.12345", output_dir="./papers")
+client.download("10.18653/v1/P18-1001")        # DOI
+client.download("P18-1001", source="acl_anthology")  # ACL Anthology ID
 ```
 
 ### Using Backends Directly

@@ -44,6 +44,7 @@ class BaseBackend(ABC):
         """
         pass
 
+    @abstractmethod
     def download(self, identifier: str, **kwargs) -> Dict:
         """
         Download a paper by identifier.
@@ -55,7 +56,7 @@ class BaseBackend(ABC):
         Returns:
             Dictionary with download information.
         """
-        pass
+        ...
 
     def validate_source(self, source: str) -> bool:
         """

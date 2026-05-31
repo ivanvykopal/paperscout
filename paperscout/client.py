@@ -71,19 +71,31 @@ class PaperFinderClient:
         """
         return self.searcher.search(query, source, limit, **kwargs)
 
-    def download(self, identifier: str, source: str = "arxiv", **kwargs) -> Dict:
+    def download(
+        self,
+        identifier: str,
+        source: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        **kwargs,
+    ) -> Dict:
         """
         Download a paper by identifier (DOI, arXiv ID, etc.).
 
+        The identifier type is auto-detected (arXiv, DOI, ACL, DBLP, etc.)
+        so you don't need to specify the source manually.
+
         Args:
-            identifier: Unique paper identifier.
-            source: Source to download from.
-            **kwargs: Download options.
+            identifier: Unique paper identifier (DOI, arXiv ID, ACL ID, DBLP key, etc.).
+            source: Source to download from. Auto-detected if not provided.
+            output_dir: Directory to save the PDF. Defaults to ./downloads.
+            **kwargs: Additional backend-specific options.
 
         Returns:
-            Path to the downloaded paper or paper metadata.
+            Dictionary with download information (status, path, filename, title, etc.).
         """
-        return self.searcher.download(identifier, source, **kwargs)
+        return self.downloader.download(
+            identifier, source=source, output_dir=output_dir, **kwargs
+        )
 
     def verify_bibtex(
         self,

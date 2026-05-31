@@ -32,17 +32,14 @@ class TestPaperFinderClient(unittest.TestCase):
     def test_downloader_property(self):
         """Test downloader property returns downloader instance."""
         client = PaperFinderClient()
-        # Mock the downloader to avoid actual initialization
-        with patch("paper_finder.download.PaperDownloader") as MockDownloader:
-            mock_downloader = MagicMock()
-            MockDownloader.return_value = mock_downloader
-            downloader = client.downloader
-            self.assertIsNotNone(downloader)
-            MockDownloader.assert_called_once()
+        downloader = client.downloader
+        self.assertIsNotNone(downloader)
+        from paperscout.download import PaperDownloader
+        self.assertIsInstance(downloader, PaperDownloader)
 
     def test_search_with_arxiv_source(self):
         """Test search with arxiv source."""
-        from paper_finder.backends.arxiv import ArxivBackend
+        from paperscout.backends.arxiv import ArxivBackend
         with patch.object(ArxivBackend, 'search', return_value=[]):
             client = PaperFinderClient()
             results = client.search("quantum computing", source="arxiv", limit=10)
@@ -50,19 +47,24 @@ class TestPaperFinderClient(unittest.TestCase):
 
     def test_search_with_acl_anthology_source(self):
         """Test search with acl_anthology source."""
-        from paper_finder.backends.acl_anthology import ACLAnthologyBackend
-        with patch.object(ACLAnthologyBackend, 'search', return_value=[]):
+        from paperscout.backends.acl_anthology import ACLAnthologyBackend
+        with patch.object(ACLAnthologyBackend, 'search', return_value=[]), \
+             patch("paperscout.backends.acl_anthology.Anthology", create=True), \
+             patch("paperscout.backends.acl_anthology.ACL_ANTHOLOGY_AVAILABLE", True):
             client = PaperFinderClient()
             results = client.search("attention", source="acl_anthology", limit=10)
             self.assertIsInstance(results, list)
 
     def test_download_with_arxiv(self):
-        """Test download with arxiv source."""
-        from paper_finder.backends.arxiv import ArxivBackend
-        with patch.object(ArxivBackend, 'download', return_value={"status": "success", "identifier": "2301.12345"}):
+        """Test download with arxiv source via the downloader."""
+        from paperscout.backends.arxiv import ArxivBackend
+        with patch.object(ArxivBackend, 'download',
+                          return_value={"status": "success", "identifier": "2301.12345",
+                                        "path": "/tmp/test.pdf", "filename": "2301.12345.pdf"}):
             client = PaperFinderClient()
-            result = client.download("2301.12345", source="arxiv")
+            result = client.download("arXiv:2301.12345", source="arxiv")
             self.assertIn("status", result)
+            self.assertEqual(result["status"], "success")
 
 
 if __name__ == "__main__":

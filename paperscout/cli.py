@@ -106,16 +106,26 @@ def main():
 
     # Download command
     download_parser = subparsers.add_parser(
-        "download", help="Download a paper"
+        "download", help="Download a paper PDF"
     )
     download_parser.add_argument(
-        "identifier", help="Paper identifier (DOI, arXiv ID, etc.)"
+        "identifier",
+        help="Paper identifier (DOI, arXiv ID, ACL ID, DBLP key, etc.). "
+             "The type is auto-detected — no need to specify --source.",
+    )
+    download_parser.add_argument(
+        "-s",
+        "--source",
+        choices=["arxiv", "dblp", "semantic_scholar", "acl_anthology"],
+        default=None,
+        help="Source backend to use (auto-detected from identifier if not specified)",
     )
     download_parser.add_argument(
         "-o",
         "--output",
         type=str,
-        help="Output directory (default: ./downloads)",
+        default="./downloads",
+        help="Directory to save the downloaded PDF (default: ./downloads)",
     )
     download_parser.add_argument(
         "-j",
@@ -200,8 +210,24 @@ def main():
             )
 
     elif args.command == "download":
-        result = client.download(args.identifier)
-        output_results(result, args.output, args.json)
+        result = client.download(
+            args.identifier,
+            source=args.source,
+            output_dir=args.output,
+        )
+        # Display the result to console (no file output — --output controls
+        # the PDF save directory, not where to write the status text)
+        if args.json:
+            console.print(json.dumps(result, indent=2))
+        elif result.get("status") == "success":
+            console.print(
+                f"[green]✓ Downloaded: {result.get('title', args.identifier)}[/green]"
+            )
+            console.print(f"  Saved to: {result.get('path', 'unknown')}")
+        else:
+            console.print(
+                f"[red]✗ Download failed: {result.get('message', 'Unknown error')}[/red]"
+            )
 
     elif args.command == "verify":
         client = PaperFinderClient()

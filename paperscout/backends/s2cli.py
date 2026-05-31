@@ -87,16 +87,20 @@ class SemanticScholarBackend(BaseBackend):
 
         return [self._format_result(result) for result in results.get("data", [])]
 
-    def download(self, identifier: str) -> Dict:
+    def download(self, identifier: str, output_dir: Optional[str] = None) -> Dict:
         """
         Download a paper from Semantic Scholar.
 
         Args:
-            identifier: Semantic Scholar ID (e.g., '1234567890abcdef1234567890abcdef').
+            identifier: Semantic Scholar ID or DOI.
+            output_dir: Directory to save the PDF (defaults to temp dir).
 
         Returns:
             Dictionary with download information including path.
         """
+        save_dir = Path(output_dir) if output_dir else self.download_dir
+        save_dir.mkdir(parents=True, exist_ok=True)
+
         paper = self.client.get_paper(identifier)
         if not paper:
             return {"status": "error", "message": f"Paper with ID {identifier} not found."}
@@ -104,9 +108,20 @@ class SemanticScholarBackend(BaseBackend):
         # get pdf_url from result
         pdf_url = paper.get("pdf_url", "")
         if not pdf_url:
+            # Try external IDs for a PDF URL
+            external_ids = paper.get("externalIds", {}) or {}
+            doi = external_ids.get("DOI", "")
+            arxiv_id = external_ids.get("ArXiv", "")
+            if arxiv_id:
+                # Try to get PDF from arXiv
+                pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+            elif doi:
+                pdf_url = f"https://doi.org/{doi}"
+
+        if not pdf_url:
             return {"status": "error", "message": f"No PDF URL found for paper with ID {identifier}."}
-        
-        path, filename = self._download_file(pdf_url, identifier)
+
+        path, filename = self._download_file(pdf_url, identifier, save_dir)
 
         return {
             "status": "success",
@@ -149,20 +164,21 @@ class SemanticScholarBackend(BaseBackend):
             similarity=None,
         )
     
-    def _download_file(self, url: str, identifier: str) -> Tuple[str, str]:
+    def _download_file(self, url: str, identifier: str, save_dir: Optional[Path] = None) -> Tuple[str, str]:
         """
         Download a file from a URL and save it to the download directory.
 
         Args:
             url: URL of the file to download.
             identifier: Identifier for naming the downloaded file.
+            save_dir: Directory to save the file (defaults to self.download_dir).
         Returns:
             Tuple of (file path, filename).
         """
+        target_dir = save_dir if save_dir else self.download_dir
         filename = f"{identifier.replace('/', '_')}.pdf"
-        path = self.download_dir / filename
+        path = target_dir / filename
         try:
-            # do now use arxivy to download
             import requests
             response = requests.get(url)
             response.raise_for_status()

@@ -55,7 +55,9 @@ class TestPaperSearcher(unittest.TestCase):
     def test_search_acl_anthology_backend_registered(self):
         """Test acl_anthology backend can be used."""
         from paperscout.backends.acl_anthology import ACLAnthologyBackend
-        with patch.object(ACLAnthologyBackend, 'search', return_value=[]):
+        with patch.object(ACLAnthologyBackend, 'search', return_value=[]), \
+             patch("paperscout.backends.acl_anthology.Anthology", create=True), \
+             patch("paperscout.backends.acl_anthology.ACL_ANTHOLOGY_AVAILABLE", True):
             results = self.searcher.search("attention", source="acl_anthology", limit=3)
             self.assertIsInstance(results, list)
 
