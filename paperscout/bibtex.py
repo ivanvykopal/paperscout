@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import bibtexparser
+from rich.progress import Progress
 from rich.table import Table
 
 from paperscout.search import PaperSearcher
@@ -95,9 +96,14 @@ class BibtexVerifier:
             return []
 
         results = []
-        for entry in entries:
-            result = self._verify_entry(entry, sources, enrich)
-            results.append(result)
+        with Progress() as progress:
+            task = progress.add_task(
+                "[cyan]Verifying BibTeX entries...", total=len(entries)
+            )
+            for entry in entries:
+                result = self._verify_entry(entry, sources, enrich)
+                results.append(result)
+                progress.advance(task)
 
         return results
 
