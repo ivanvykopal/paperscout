@@ -159,23 +159,13 @@ except ImportError:
     ACL_ANTHOLOGY_AVAILABLE = False
 
 
-class ACLAnthologyBackend(BaseBackend):
-    """
-    Backend for searching and downloading papers from ACL Anthology.
+class _ACLAnthologyLocalBackend(BaseBackend):
+    """Legacy local ACL Anthology backend using the acl-anthology package."""
 
-    Uses the acl-anthology library for ACL Anthology API interactions.
-    """
-
-    name: str = "acl_anthology"
+    name: str = "acl_anthology_local"
     supported_sources: List[str] = ["acl_anthology", "acl", "anthology"]
 
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize the ACL Anthology backend.
-
-        Args:
-            api_key: Optional API key (not typically required for ACL Anthology).
-        """
         super().__init__(api_key)
         if not ACL_ANTHOLOGY_AVAILABLE:
             raise ImportError(
@@ -343,7 +333,7 @@ class ACLAnthologyBackend(BaseBackend):
             categories=[_get_str_attr(paper, 'venue', '')] if getattr(paper, 'venue', '') else [],
             similarity=similarity if similarity > 0 else None,
         )
-    
+
     def _parse_authors(self, authors: Any) -> List[str]:
         if not authors:
             return []
@@ -448,3 +438,20 @@ class ACLAnthologyBackend(BaseBackend):
             return str(path), filename
         except Exception as e:
             raise RuntimeError(f"Failed to download file from {url}: {str(e)}")
+
+
+class ACLAnthologyBackend(BaseBackend):
+    """Backward-compatible wrapper around the local backend (replaced in Task 8)."""
+
+    name: str = "acl_anthology"
+    supported_sources: List[str] = ["acl_anthology", "acl", "anthology"]
+
+    def __init__(self, api_key: Optional[str] = None, **_kwargs):
+        super().__init__(api_key)
+        self._local = _ACLAnthologyLocalBackend(api_key)
+
+    def search(self, query: str, limit: int = 10) -> List[Paper]:
+        return self._local.search(query, limit=limit)
+
+    def download(self, identifier: str, **kwargs) -> Dict:
+        return self._local.download(identifier, **kwargs)

@@ -368,5 +368,25 @@ def test_download_pdf_writes_file(tmp_path):
         mock_get.assert_called_once_with(pdf_url, timeout=client.timeout)
 
 
+def test_local_backend_inherits_base():
+    with patch("paperscout.backends.acl_anthology.ACL_ANTHOLOGY_AVAILABLE", True):
+        with patch("paperscout.backends.acl_anthology._ACLAnthologyLocalBackend.__init__", return_value=None):
+            from paperscout.backends.acl_anthology import _ACLAnthologyLocalBackend
+            backend = _ACLAnthologyLocalBackend()
+            from paperscout.backends.base import BaseBackend
+            assert isinstance(backend, BaseBackend)
+
+
+def test_local_backend_search_method_exists():
+    with patch("paperscout.backends.acl_anthology.ACL_ANTHOLOGY_AVAILABLE", True):
+        with patch("paperscout.backends.acl_anthology._ACLAnthologyLocalBackend.__init__", return_value=None):
+            from paperscout.backends.acl_anthology import _ACLAnthologyLocalBackend
+            backend = _ACLAnthologyLocalBackend()
+            assert hasattr(backend, "search")
+            assert callable(getattr(backend, "search"))
+            assert hasattr(backend, "download")
+            assert callable(getattr(backend, "download"))
+
+
 if __name__ == "__main__":
     unittest.main()
