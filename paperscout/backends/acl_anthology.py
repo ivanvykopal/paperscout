@@ -155,8 +155,8 @@ class ACLAnthologyBackend(BaseBackend):
                 "message": f"Paper with ID {identifier} not found in ACL Anthology.",
             }
 
-        # Download PDF
-        pdf_url = paper.pdf
+        # Download PDF - use _parse_pdf_url to construct proper URL from web_url
+        pdf_url = self._parse_pdf_url(paper)
         if not pdf_url:
             return {
                 "status": "error",
