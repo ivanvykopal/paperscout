@@ -18,11 +18,11 @@ as documented in `docs/acl-anthology-api-reference.md`.
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| API transport | HTTP client (`httpx` or `requests`) | Matches the service's REST API; lighter than loading the full anthology locally. |
+| API transport | HTTP client (`requests`) | Reuses the project's existing `requests` dependency; lighter than loading the full anthology locally. |
 | Base URL | `https://ivykopal-acl-api.hf.space` default, configurable via constructor arg or `PAPERSCOUT_ACL_API_URL` env var | Hardcodes the known HF Space while allowing local dev/testing. |
 | Search strategy | Similarity first, then keyword, then merge/deduplicate | User preference; reduces load vs. concurrent calls and gives semantic matches priority. |
 | Fallback | HTTP API first, local `acl-anthology` package second | Keeps the backend usable offline or during API outages. |
-| 503 readiness | Retry with exponential backoff inside the HTTP client | Reference doc describes this as a normal startup state; callers should not need to handle it. |
+| 503 readiness | Retry with exponential backoff inside the HTTP client (total cumulative wait up to `max_retry_wait`) | Reference doc describes this as a normal startup state; callers should not need to handle it. |
 | 500 errors | Fall back to local backend | Any server error (including malformed FTS5) rolls back to the local package. |
 | Dependency model | Keep `acl-anthology` as an optional fallback dependency | Users who only want the API path can skip installing it. |
 
@@ -97,8 +97,10 @@ result: dict = backend.download("N18-3011", output_dir="./downloads")
    - If a paper appears in both lists, keep the higher `similarity`/`score`.
 6. The merged list is truncated to `limit` and sorted by score descending.
 7. Each item is mapped to the internal `Paper` dataclass.
-8. If the HTTP path fails at any point, the facade falls back to
-   `_ACLAnthologyLocalBackend.search(...)`.
+8. If similarity search fails entirely, the facade falls back to
+   `_ACLAnthologyLocalBackend.search(...)`. If similarity succeeds but keyword
+   search fails, return the merged/deduplicated similarity results without
+   falling back to the local backend.
 
 ### API-to-`Paper` mapping
 
@@ -139,8 +141,11 @@ result: dict = backend.download("N18-3011", output_dir="./downloads")
 
 ### Facade fallback
 
-- If the HTTP client raises after exhausting retries, the facade logs a warning
-  and tries `_ACLAnthologyLocalBackend` when `acl-anthology` is installed.
+- If the HTTP client raises after exhausting retries and no usable results have
+  been collected yet, the facade logs a warning and tries
+  `_ACLAnthologyLocalBackend` when `acl-anthology` is installed.
+- If similarity search returned results but keyword search failed, the facade
+  returns the similarity results without falling back.
 - If the local backend is unavailable, the facade returns:
   - `search(...)`: empty list `[]`.
   - `download(...)`: error dict `{"status": "error", "message": "..."}`.
