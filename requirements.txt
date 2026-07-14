@@ -5,11 +5,11 @@ beautifulsoup4>=4.11.0
 # CLI formatting
 rich>=13.0.0
 
-# Backend dependencies
+# Backend dependencies (optional; install via pip install paperscout[all] or paperscout[<backend>])
 arxivy
 dblpcli
 s2cli
-acl-anthology
+acl-anthology  # optional: only needed for local fallback in the acl_anthology backend
 
 # Development dependencies
 pytest>=7.0.0

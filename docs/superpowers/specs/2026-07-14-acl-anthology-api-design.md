@@ -97,10 +97,8 @@ result: dict = backend.download("N18-3011", output_dir="./downloads")
    - If a paper appears in both lists, keep the higher `similarity`/`score`.
 6. The merged list is truncated to `limit` and sorted by score descending.
 7. Each item is mapped to the internal `Paper` dataclass.
-8. If similarity search fails entirely, the facade falls back to
-   `_ACLAnthologyLocalBackend.search(...)`. If similarity succeeds but keyword
-   search fails, return the merged/deduplicated similarity results without
-   falling back to the local backend.
+8. If the HTTP path fails at any point, the facade falls back to
+   `_ACLAnthologyLocalBackend.search(...)`.
 
 ### API-to-`Paper` mapping
 
@@ -141,11 +139,8 @@ result: dict = backend.download("N18-3011", output_dir="./downloads")
 
 ### Facade fallback
 
-- If the HTTP client raises after exhausting retries and no usable results have
-  been collected yet, the facade logs a warning and tries
-  `_ACLAnthologyLocalBackend` when `acl-anthology` is installed.
-- If similarity search returned results but keyword search failed, the facade
-  returns the similarity results without falling back.
+- If the HTTP client raises after exhausting retries, the facade logs a warning
+  and tries `_ACLAnthologyLocalBackend` when `acl-anthology` is installed.
 - If the local backend is unavailable, the facade returns:
   - `search(...)`: empty list `[]`.
   - `download(...)`: error dict `{"status": "error", "message": "..."}`.

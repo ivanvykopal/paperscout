@@ -5,14 +5,150 @@ ACL Anthology is the premier repository of computational linguistics
 papers, covering venues like ACL, EMNLP, NAACL, and more.
 """
 
+import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
+
+import requests
 
 from paperscout.backends.base import BaseBackend
 from paperscout.similarity import _title_similarity
 from paperscout.types import Paper
+
+logger = logging.getLogger(__name__)
+
+
+DEFAULT_ACL_API_URL = "https://ivykopal-acl-api.hf.space"
+
+
+class _ACLAnthologyHTTPClient:
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        timeout: float = 30.0,
+        max_retry_wait: float = 30.0,
+    ):
+        resolved = base_url or os.environ.get("PAPERSCOUT_ACL_API_URL") or DEFAULT_ACL_API_URL
+        self.base_url = resolved.rstrip("/")
+        self.timeout = timeout
+        self.max_retry_wait = max_retry_wait
+
+    def health(self) -> dict:
+        response = requests.get(f"{self.base_url}/health", timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+
+    def _request_with_retry(
+        self,
+        method: str,
+        path: str,
+        **kwargs,
+    ):
+        url = f"{self.base_url}{path}"
+        kwargs.setdefault("timeout", self.timeout)
+
+        delay = 1.0
+        total_wait = 0.0
+        while True:
+            response = requests.request(method, url, **kwargs)
+            if response.status_code == 503:
+                logger.debug("Got 503 from %s, retrying after %.1fs", url, delay)
+                time.sleep(delay)
+                total_wait += delay
+                delay *= 2
+                if total_wait >= self.max_retry_wait:
+                    response.raise_for_status()
+                continue
+            response.raise_for_status()
+            return response
+
+    def _paper_from_api(
+        self,
+        data: dict,
+        similarity: Optional[float] = None,
+    ) -> Paper:
+        authors_raw = data.get("authors", "") or ""
+        authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
+
+        venue = (data.get("venue", "") or "").strip()
+        categories = [venue] if venue else []
+
+        year = data.get("year")
+        if year is not None:
+            year = int(year)
+
+        return Paper(
+            title=(data.get("title", "") or "").strip(),
+            authors=authors,
+            year=year,
+            abstract=(data.get("abstract", "") or "").strip(),
+            source="acl_anthology",
+            identifier=(data.get("id", "") or "").strip(),
+            url=(data.get("url", "") or "").strip(),
+            pdf_url=(data.get("pdf_url", "") or "").strip(),
+            published="",
+            categories=categories,
+            similarity=similarity,
+        )
+
+    def search_similarity(self, query: str, k: int = 10) -> List[Paper]:
+        response = self._request_with_retry(
+            "GET",
+            "/search/similarity",
+            params={"q": query, "k": k},
+        )
+        data = response.json()
+        return [self._paper_from_api(item, similarity=item.get("score")) for item in data]
+
+    def search_keyword(self, query: str, limit: int = 10) -> List[Paper]:
+        response = self._request_with_retry(
+            "GET",
+            "/search/keyword",
+            params={"q": query, "limit": limit},
+        )
+        data = response.json()
+        return [self._paper_from_api(item) for item in data]
+
+    def search(self, query: str, limit: int = 10) -> List[Paper]:
+        similarity_results = self.search_similarity(query, k=limit)
+        keyword_results = self.search_keyword(query, limit=limit)
+
+        merged: Dict[str, Paper] = {}
+        for paper in similarity_results + keyword_results:
+            existing = merged.get(paper.identifier)
+            if existing is None or (paper.similarity or 0) > (existing.similarity or 0):
+                merged[paper.identifier] = paper
+
+        results = list(merged.values())
+        results.sort(key=lambda p: p.similarity or 0, reverse=True)
+        return results[:limit]
+
+    def get_paper(self, paper_id: str) -> Optional[Paper]:
+        try:
+            response = self._request_with_retry("GET", f"/paper/{paper_id}")
+        except Exception:
+            return None
+        return self._paper_from_api(response.json())
+
+    def download_pdf(self, pdf_url: str, save_dir: Path) -> Tuple[str, str]:
+        response = requests.get(pdf_url, timeout=self.timeout)
+        response.raise_for_status()
+
+        # Derive filename from URL path; fall back to 'paper.pdf'
+        parsed = urlparse(pdf_url)
+        filename = Path(parsed.path).name or "paper.pdf"
+        if not filename.endswith(".pdf"):
+            filename += ".pdf"
+
+        save_dir.mkdir(parents=True, exist_ok=True)
+        path = save_dir / filename
+        path.write_bytes(response.content)
+        return str(path), filename
+
 
 try:
     from acl_anthology import Anthology
@@ -21,23 +157,13 @@ except ImportError:
     ACL_ANTHOLOGY_AVAILABLE = False
 
 
-class ACLAnthologyBackend(BaseBackend):
-    """
-    Backend for searching and downloading papers from ACL Anthology.
+class _ACLAnthologyLocalBackend(BaseBackend):
+    """Legacy local ACL Anthology backend using the acl-anthology package."""
 
-    Uses the acl-anthology library for ACL Anthology API interactions.
-    """
-
-    name: str = "acl_anthology"
+    name: str = "acl_anthology_local"
     supported_sources: List[str] = ["acl_anthology", "acl", "anthology"]
 
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Initialize the ACL Anthology backend.
-
-        Args:
-            api_key: Optional API key (not typically required for ACL Anthology).
-        """
         super().__init__(api_key)
         if not ACL_ANTHOLOGY_AVAILABLE:
             raise ImportError(
@@ -155,7 +281,7 @@ class ACLAnthologyBackend(BaseBackend):
                 "message": f"Paper with ID {identifier} not found in ACL Anthology.",
             }
 
-        # Download PDF - use _parse_pdf_url to construct proper URL from web_url
+        # Download PDF - resolve PDF URL from paper.pdf or web_url
         pdf_url = self._parse_pdf_url(paper)
         if not pdf_url:
             return {
@@ -205,7 +331,7 @@ class ACLAnthologyBackend(BaseBackend):
             categories=[_get_str_attr(paper, 'venue', '')] if getattr(paper, 'venue', '') else [],
             similarity=similarity if similarity > 0 else None,
         )
-    
+
     def _parse_authors(self, authors: Any) -> List[str]:
         if not authors:
             return []
@@ -223,10 +349,15 @@ class ACLAnthologyBackend(BaseBackend):
         return []
 
     def _parse_pdf_url(self, paper: Any) -> str:
+        pdf = getattr(paper, 'pdf', None)
+        if pdf is not None:
+            pdf_url = getattr(pdf, 'url', None)
+            if pdf_url:
+                return str(pdf_url)
         web_url = getattr(paper, 'web_url', '')
-        if web_url and web_url.endswith('/'):
-            return web_url[:-1] + '.pdf'
-        elif web_url:
+        if web_url:
+            if web_url.endswith('/'):
+                web_url = web_url[:-1]
             return web_url + '.pdf'
         return ""
 
@@ -259,7 +390,7 @@ class ACLAnthologyBackend(BaseBackend):
                 "message": f"Paper with DOI '{doi}' not found in ACL Anthology.",
             }
 
-        pdf_url = getattr(paper, 'pdf', None)
+        pdf_url = self._parse_pdf_url(paper)
         if not pdf_url:
             return {
                 "status": "error",
@@ -296,8 +427,6 @@ class ACLAnthologyBackend(BaseBackend):
         Returns:
             Tuple of (file path, filename).
         """
-        import requests
-
         target_dir = save_dir if save_dir else self.download_dir
         filename = f"{identifier.replace('/', '_')}.pdf"
         path = target_dir / filename
@@ -310,3 +439,67 @@ class ACLAnthologyBackend(BaseBackend):
             return str(path), filename
         except Exception as e:
             raise RuntimeError(f"Failed to download file from {url}: {str(e)}")
+
+
+class ACLAnthologyBackend(BaseBackend):
+    """Public facade for ACL Anthology: tries HTTP API first, falls back to local package."""
+
+    name: str = "acl_anthology"
+    supported_sources: List[str] = ["acl_anthology", "acl", "anthology"]
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        timeout: float = 30.0,
+        max_retry_wait: float = 30.0,
+    ):
+        super().__init__(api_key)
+        self._http_client = _ACLAnthologyHTTPClient(
+            base_url=base_url,
+            timeout=timeout,
+            max_retry_wait=max_retry_wait,
+        )
+        self._local_backend: Optional[_ACLAnthologyLocalBackend] = None
+        if ACL_ANTHOLOGY_AVAILABLE:
+            try:
+                self._local_backend = _ACLAnthologyLocalBackend(api_key)
+            except Exception as e:
+                logger.warning("Failed to initialize local ACL Anthology backend: %s", e)
+
+    def search(self, query: str, limit: int = 10) -> List[Paper]:
+        try:
+            return self._http_client.search(query, limit=limit)
+        except Exception as e:
+            logger.warning("ACL Anthology API search failed (%s), trying local fallback.", e)
+            if self._local_backend is not None:
+                return self._local_backend.search(query, limit=limit)
+            logger.warning("No local ACL Anthology backend available.")
+            return []
+
+    def download(self, identifier: str, **kwargs) -> Dict:
+        output_dir = kwargs.get("output_dir")
+        try:
+            paper = self._http_client.get_paper(identifier)
+            if paper is not None and paper.pdf_url:
+                save_dir = Path(output_dir) if output_dir else Path(tempfile.gettempdir()) / "paperscout" / "acl_anthology"
+                path, filename = self._http_client.download_pdf(paper.pdf_url, save_dir)
+                return {
+                    "status": "success",
+                    "identifier": identifier,
+                    "path": path,
+                    "filename": filename,
+                    "title": paper.title,
+                    "authors": paper.authors,
+                    "source": "acl_anthology",
+                }
+        except Exception as e:
+            logger.warning("ACL Anthology API download failed (%s), trying local fallback.", e)
+
+        if self._local_backend is not None:
+            return self._local_backend.download(identifier, **kwargs)
+
+        return {
+            "status": "error",
+            "message": f"Failed to download {identifier} from ACL Anthology API and no local backend is available.",
+        }
