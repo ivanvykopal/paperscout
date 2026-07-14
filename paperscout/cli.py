@@ -134,7 +134,7 @@ def main():
         help="Output results as JSON",
     )
 
-    # Verify command
+    # Verify command - BibTeX
     verify_parser = subparsers.add_parser("verify", help="Verify BibTeX entries")
     verify_parser.add_argument(
         "file",
@@ -166,6 +166,36 @@ def main():
         help="Write annotated .bib to this path",
     )
     verify_parser.add_argument(
+        "-j", "--json",
+        dest="json_output",
+        help="Write JSON report to this path",
+    )
+
+    # Verify-markdown command - verify references from markdown files
+    verify_md_parser = subparsers.add_parser(
+        "verify-markdown",
+        help="Verify references from markdown file (References section)"
+    )
+    verify_md_parser.add_argument(
+        "file",
+        help="Path to markdown file (.md) with References section",
+    )
+    verify_md_parser.add_argument(
+        "-s", "--source",
+        dest="sources",
+        help="Backends to use (comma-separated: arxiv,dblp,etc.)",
+    )
+    verify_md_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="Confidence threshold for suspicious (default: 0.5)",
+    )
+    verify_md_parser.add_argument(
+        "-o", "--output",
+        help="Write verification report to this path",
+    )
+    verify_md_parser.add_argument(
         "-j", "--json",
         dest="json_output",
         help="Write JSON report to this path",
@@ -254,6 +284,50 @@ def main():
         # Write JSON report if requested
         if args.json_output:
             verifier.generate_json_report(args.json_output, results)
+            console.print(f"[green]JSON report written to {args.json_output}[/green]")
+
+    elif args.command == "verify-markdown":
+        from paperscout.markdown_refs import MarkdownRefParser
+
+        parser = MarkdownRefParser()
+        sources = args.sources.split(",") if args.sources else None
+        results = parser.verify_file(
+            args.file,
+            sources=sources,
+        )
+
+        # Print console report
+        console.print(parser._format_verification_report(results))
+
+        # Write report if requested
+        if args.output:
+            report = parser.format_report(results)
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write(report)
+            console.print(f"[green]Verification report written to {args.output}[/green]")
+
+        # Write JSON report if requested
+        if args.json_output:
+            # Convert results to JSON-serializable format
+            import json
+            report_data = []
+            for r in results:
+                entry = {
+                    "citation_text": r.citation_text,
+                    "extracted_title": r.extracted_title,
+                    "extracted_authors": r.extracted_authors,
+                    "extracted_year": r.extracted_year,
+                    "verdict": r.verdict,
+                    "confidence": round(r.confidence, 3),
+                    "matched_paper": r.matched_paper.to_dict() if r.matched_paper else None,
+                    "backend_used": r.backend_used,
+                    "discrepancies": r.discrepancies,
+                    "error": r.error,
+                }
+                report_data.append(entry)
+
+            with open(args.json_output, "w", encoding="utf-8") as f:
+                json.dump(report_data, f, indent=2, ensure_ascii=False)
             console.print(f"[green]JSON report written to {args.json_output}[/green]")
 
 

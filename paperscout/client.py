@@ -122,3 +122,26 @@ class PaperFinderClient:
 
         verifier = BibtexVerifier(threshold=threshold)
         return verifier.verify_file(path, sources=sources, enrich=enrich, parallel=parallel)
+
+    def verify_markdown_references(
+        self,
+        path: str,
+        sources: list[str] | None = None,
+        threshold: float = 0.5,
+    ) -> list:
+        """
+        Verify references extracted from a markdown file.
+
+        Args:
+            path: Path to .md file with References section.
+            sources: Specific backends to use.
+            threshold: Confidence threshold.
+
+        Returns:
+            List of ReferenceVerificationResult objects.
+        """
+        from paperscout.markdown_refs import MarkdownRefParser
+
+        parser = MarkdownRefParser()
+        # Note: threshold is currently used internally by the parser via BibtexVerifier
+        return parser.verify_file(path, sources=sources)
