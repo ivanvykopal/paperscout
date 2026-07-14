@@ -388,5 +388,55 @@ def test_local_backend_search_method_exists():
             assert callable(getattr(backend, "download"))
 
 
+def test_facade_uses_http_client_for_search():
+    from paperscout.backends.acl_anthology import ACLAnthologyBackend
+    backend = ACLAnthologyBackend()
+    mock_paper = MagicMock()
+    with patch.object(backend, "_http_client") as mock_http:
+        mock_http.search.return_value = [mock_paper]
+        results = backend.search("attention", limit=5)
+        assert results == [mock_paper]
+        mock_http.search.assert_called_once_with("attention", limit=5)
+
+
+def test_facade_falls_back_to_local_on_search_error():
+    from paperscout.backends.acl_anthology import ACLAnthologyBackend
+    backend = ACLAnthologyBackend()
+    backend._local_backend = MagicMock()
+    backend._local_backend.search.return_value = []
+    with patch.object(backend._http_client, "search", side_effect=Exception("API down")):
+        results = backend.search("attention", limit=5)
+        assert results == []
+        backend._local_backend.search.assert_called_once_with("attention", limit=5)
+
+
+def test_facade_uses_http_client_for_download():
+    from paperscout.backends.acl_anthology import ACLAnthologyBackend
+    backend = ACLAnthologyBackend()
+    with patch.object(backend, "_http_client") as mock_http:
+        mock_http.get_paper.return_value = MagicMock(
+            identifier="N18-3011",
+            title="Attention Is All You Need",
+            authors=["A", "B"],
+            pdf_url="https://aclanthology.org/N18-3011.pdf",
+        )
+        mock_http.download_pdf.return_value = ("/tmp/N18-3011.pdf", "N18-3011.pdf")
+        result = backend.download("N18-3011", output_dir="/tmp")
+        assert result["status"] == "success"
+        mock_http.get_paper.assert_called_once_with("N18-3011")
+        mock_http.download_pdf.assert_called_once()
+
+
+def test_facade_falls_back_to_local_on_download_error():
+    from paperscout.backends.acl_anthology import ACLAnthologyBackend
+    backend = ACLAnthologyBackend()
+    backend._local_backend = MagicMock()
+    backend._local_backend.download.return_value = {"status": "success"}
+    with patch.object(backend._http_client, "get_paper", side_effect=Exception("API down")):
+        result = backend.download("N18-3011", output_dir="/tmp")
+        assert result["status"] == "success"
+        backend._local_backend.download.assert_called_once_with("N18-3011", output_dir="/tmp")
+
+
 if __name__ == "__main__":
     unittest.main()

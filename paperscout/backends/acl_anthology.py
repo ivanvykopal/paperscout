@@ -441,17 +441,65 @@ class _ACLAnthologyLocalBackend(BaseBackend):
 
 
 class ACLAnthologyBackend(BaseBackend):
-    """Backward-compatible wrapper around the local backend (replaced in Task 8)."""
+    """Public facade for ACL Anthology: tries HTTP API first, falls back to local package."""
 
     name: str = "acl_anthology"
     supported_sources: List[str] = ["acl_anthology", "acl", "anthology"]
 
-    def __init__(self, api_key: Optional[str] = None, **_kwargs):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        timeout: float = 30.0,
+        max_retry_wait: float = 30.0,
+    ):
         super().__init__(api_key)
-        self._local = _ACLAnthologyLocalBackend(api_key)
+        self._http_client = _ACLAnthologyHTTPClient(
+            base_url=base_url,
+            timeout=timeout,
+            max_retry_wait=max_retry_wait,
+        )
+        self._local_backend: Optional[_ACLAnthologyLocalBackend] = None
+        if ACL_ANTHOLOGY_AVAILABLE:
+            try:
+                self._local_backend = _ACLAnthologyLocalBackend(api_key)
+            except Exception as e:
+                logger.warning("Failed to initialize local ACL Anthology backend: %s", e)
 
     def search(self, query: str, limit: int = 10) -> List[Paper]:
-        return self._local.search(query, limit=limit)
+        try:
+            return self._http_client.search(query, limit=limit)
+        except Exception as e:
+            logger.warning("ACL Anthology API search failed (%s), trying local fallback.", e)
+            if self._local_backend is not None:
+                return self._local_backend.search(query, limit=limit)
+            logger.warning("No local ACL Anthology backend available.")
+            return []
 
     def download(self, identifier: str, **kwargs) -> Dict:
-        return self._local.download(identifier, **kwargs)
+        output_dir = kwargs.get("output_dir")
+        try:
+            paper = self._http_client.get_paper(identifier)
+            if paper is not None and paper.pdf_url:
+                from pathlib import Path
+                save_dir = Path(output_dir) if output_dir else Path(tempfile.gettempdir()) / "paperscout" / "acl_anthology"
+                path, filename = self._http_client.download_pdf(paper.pdf_url, save_dir)
+                return {
+                    "status": "success",
+                    "identifier": identifier,
+                    "path": path,
+                    "filename": filename,
+                    "title": paper.title,
+                    "authors": paper.authors,
+                    "source": "acl_anthology",
+                }
+        except Exception as e:
+            logger.warning("ACL Anthology API download failed (%s), trying local fallback.", e)
+
+        if self._local_backend is not None:
+            return self._local_backend.download(identifier, **kwargs)
+
+        return {
+            "status": "error",
+            "message": f"Failed to download {identifier} from ACL Anthology API and no local backend is available.",
+        }
