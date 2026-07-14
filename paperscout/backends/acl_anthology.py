@@ -5,6 +5,7 @@ ACL Anthology is the premier repository of computational linguistics
 papers, covering venues like ACL, EMNLP, NAACL, and more.
 """
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -13,6 +14,31 @@ from typing import Any, Dict, List, Optional, Tuple
 from paperscout.backends.base import BaseBackend
 from paperscout.similarity import _title_similarity
 from paperscout.types import Paper
+
+logger = logging.getLogger(__name__)
+
+
+DEFAULT_ACL_API_URL = "https://ivykopal-acl-api.hf.space"
+
+
+class _ACLAnthologyHTTPClient:
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        timeout: float = 30.0,
+        max_retry_wait: float = 30.0,
+    ):
+        resolved = base_url or os.environ.get("PAPERSCOUT_ACL_API_URL") or DEFAULT_ACL_API_URL
+        self.base_url = resolved.rstrip("/")
+        self.timeout = timeout
+        self.max_retry_wait = max_retry_wait
+
+    def health(self) -> dict:
+        import requests
+        response = requests.get(f"{self.base_url}/health", timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+
 
 try:
     from acl_anthology import Anthology

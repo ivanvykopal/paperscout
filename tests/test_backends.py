@@ -103,5 +103,31 @@ class TestACLAnthologyBackend(unittest.TestCase):
                 self.assertTrue(callable(getattr(backend, 'search')))
 
 
+def test_http_client_base_url_defaults_to_hf_space():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    assert client.base_url == "https://ivykopal-acl-api.hf.space"
+
+
+def test_http_client_base_url_respects_env_var(monkeypatch):
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    monkeypatch.setenv("PAPERSCOUT_ACL_API_URL", "http://localhost:8000")
+    client = _ACLAnthologyHTTPClient()
+    assert client.base_url == "http://localhost:8000"
+
+
+def test_http_client_base_url_constructor_wins_over_env_var(monkeypatch):
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    monkeypatch.setenv("PAPERSCOUT_ACL_API_URL", "http://localhost:8000")
+    client = _ACLAnthologyHTTPClient(base_url="http://example.com")
+    assert client.base_url == "http://example.com"
+
+
+def test_http_client_strips_trailing_slash():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient(base_url="http://localhost:8000/")
+    assert client.base_url == "http://localhost:8000"
+
+
 if __name__ == "__main__":
     unittest.main()
