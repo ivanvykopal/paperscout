@@ -169,7 +169,7 @@ def test_request_with_retry_gives_up_after_max_wait():
     with patch("requests.request", return_value=bad) as mock_request:
         with pytest.raises(Exception):
             client._request_with_retry("GET", "/health")
-        assert mock_request.call_count >= 1
+        assert mock_request.call_count == 1
 
 
 def test_paper_from_api_maps_all_fields():
@@ -220,6 +220,30 @@ def test_paper_from_api_handles_null_year_and_empty_fields():
     assert paper.authors == []
     assert paper.categories == []
     assert paper.pdf_url == ""
+
+
+def test_paper_from_api_strips_whitespace():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    data = {
+        "id": "  N18-3011  ",
+        "title": "  Attention Is All You Need  ",
+        "abstract": "  We propose a new simple network architecture.  ",
+        "authors": "  Ashish Vaswani  ,  Noam Shazeer  ",
+        "venue":  "  NLP  ",
+        "year": 2017,
+        "url": "  https://aclanthology.org/N18-3011/  ",
+        "bibtex": "",
+        "pdf_url": "  https://aclanthology.org/N18-3011.pdf  ",
+    }
+    paper = client._paper_from_api(data)
+    assert paper.identifier == "N18-3011"
+    assert paper.title == "Attention Is All You Need"
+    assert paper.abstract == "We propose a new simple network architecture."
+    assert paper.authors == ["Ashish Vaswani", "Noam Shazeer"]
+    assert paper.categories == ["NLP"]
+    assert paper.url == "https://aclanthology.org/N18-3011/"
+    assert paper.pdf_url == "https://aclanthology.org/N18-3011.pdf"
 
 
 def test_search_similarity_calls_api_and_maps_results():
@@ -387,6 +411,26 @@ def test_local_backend_search_method_exists():
             assert callable(getattr(backend, "search"))
             assert hasattr(backend, "download")
             assert callable(getattr(backend, "download"))
+
+
+def test_local_backend_parse_pdf_url_prefers_pdf_reference_url():
+    from paperscout.backends.acl_anthology import _ACLAnthologyLocalBackend
+    backend = _ACLAnthologyLocalBackend.__new__(_ACLAnthologyLocalBackend)
+    pdf = MagicMock()
+    pdf.url = "https://aclanthology.org/N18-3011.pdf"
+    paper = MagicMock()
+    paper.pdf = pdf
+    paper.web_url = "https://aclanthology.org/N18-3011/"
+    assert backend._parse_pdf_url(paper) == "https://aclanthology.org/N18-3011.pdf"
+
+
+def test_local_backend_parse_pdf_url_falls_back_to_web_url():
+    from paperscout.backends.acl_anthology import _ACLAnthologyLocalBackend
+    backend = _ACLAnthologyLocalBackend.__new__(_ACLAnthologyLocalBackend)
+    paper = MagicMock()
+    paper.pdf = None
+    paper.web_url = "https://aclanthology.org/N18-3011/"
+    assert backend._parse_pdf_url(paper) == "https://aclanthology.org/N18-3011.pdf"
 
 
 def test_facade_uses_http_client_for_search():

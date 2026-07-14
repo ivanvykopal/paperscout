@@ -8,8 +8,12 @@ papers, covering venues like ACL, EMNLP, NAACL, and more.
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
+
+import requests
 
 from paperscout.backends.base import BaseBackend
 from paperscout.similarity import _title_similarity
@@ -34,7 +38,6 @@ class _ACLAnthologyHTTPClient:
         self.max_retry_wait = max_retry_wait
 
     def health(self) -> dict:
-        import requests
         response = requests.get(f"{self.base_url}/health", timeout=self.timeout)
         response.raise_for_status()
         return response.json()
@@ -45,9 +48,6 @@ class _ACLAnthologyHTTPClient:
         path: str,
         **kwargs,
     ):
-        import requests
-        import time
-
         url = f"{self.base_url}{path}"
         kwargs.setdefault("timeout", self.timeout)
 
@@ -74,7 +74,7 @@ class _ACLAnthologyHTTPClient:
         authors_raw = data.get("authors", "") or ""
         authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
 
-        venue = data.get("venue", "") or ""
+        venue = (data.get("venue", "") or "").strip()
         categories = [venue] if venue else []
 
         year = data.get("year")
@@ -135,12 +135,10 @@ class _ACLAnthologyHTTPClient:
         return self._paper_from_api(response.json())
 
     def download_pdf(self, pdf_url: str, save_dir: Path) -> Tuple[str, str]:
-        import requests
         response = requests.get(pdf_url, timeout=self.timeout)
         response.raise_for_status()
 
         # Derive filename from URL path; fall back to 'paper.pdf'
-        from urllib.parse import urlparse
         parsed = urlparse(pdf_url)
         filename = Path(parsed.path).name or "paper.pdf"
         if not filename.endswith(".pdf"):
@@ -284,7 +282,7 @@ class _ACLAnthologyLocalBackend(BaseBackend):
             }
 
         # Download PDF
-        pdf_url = paper.pdf
+        pdf_url = self._parse_pdf_url(paper)
         if not pdf_url:
             return {
                 "status": "error",
@@ -351,10 +349,15 @@ class _ACLAnthologyLocalBackend(BaseBackend):
         return []
 
     def _parse_pdf_url(self, paper: Any) -> str:
+        pdf = getattr(paper, 'pdf', None)
+        if pdf is not None:
+            pdf_url = getattr(pdf, 'url', None)
+            if pdf_url:
+                return str(pdf_url)
         web_url = getattr(paper, 'web_url', '')
-        if web_url and web_url.endswith('/'):
-            return web_url[:-1] + '.pdf'
-        elif web_url:
+        if web_url:
+            if web_url.endswith('/'):
+                web_url = web_url[:-1]
             return web_url + '.pdf'
         return ""
 
@@ -387,7 +390,7 @@ class _ACLAnthologyLocalBackend(BaseBackend):
                 "message": f"Paper with DOI '{doi}' not found in ACL Anthology.",
             }
 
-        pdf_url = getattr(paper, 'pdf', None)
+        pdf_url = self._parse_pdf_url(paper)
         if not pdf_url:
             return {
                 "status": "error",
@@ -424,8 +427,6 @@ class _ACLAnthologyLocalBackend(BaseBackend):
         Returns:
             Tuple of (file path, filename).
         """
-        import requests
-
         target_dir = save_dir if save_dir else self.download_dir
         filename = f"{identifier.replace('/', '_')}.pdf"
         path = target_dir / filename
@@ -481,7 +482,6 @@ class ACLAnthologyBackend(BaseBackend):
         try:
             paper = self._http_client.get_paper(identifier)
             if paper is not None and paper.pdf_url:
-                from pathlib import Path
                 save_dir = Path(output_dir) if output_dir else Path(tempfile.gettempdir()) / "paperscout" / "acl_anthology"
                 path, filename = self._http_client.download_pdf(paper.pdf_url, save_dir)
                 return {
