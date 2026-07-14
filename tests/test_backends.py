@@ -1,7 +1,9 @@
 """Tests for the backend architecture."""
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from paperscout.backends.base import BaseBackend
 
@@ -127,6 +129,45 @@ def test_http_client_strips_trailing_slash():
     from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
     client = _ACLAnthologyHTTPClient(base_url="http://localhost:8000/")
     assert client.base_url == "http://localhost:8000"
+
+
+def test_request_with_retry_succeeds_immediately():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"status": "ok"}
+    with patch("requests.request", return_value=mock_response) as mock_request:
+        response = client._request_with_retry("GET", "/health")
+        assert response.status_code == 200
+        assert mock_request.call_count == 1
+
+
+def test_request_with_retry_retries_on_503_then_succeeds():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient(max_retry_wait=2.0)
+    bad = MagicMock()
+    bad.status_code = 503
+    bad.raise_for_status.side_effect = Exception("503")
+    good = MagicMock()
+    good.status_code = 200
+    good.json.return_value = {"status": "ok"}
+    with patch("requests.request", side_effect=[bad, good]) as mock_request:
+        response = client._request_with_retry("GET", "/health")
+        assert response.status_code == 200
+        assert mock_request.call_count == 2
+
+
+def test_request_with_retry_gives_up_after_max_wait():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient(max_retry_wait=0.1)
+    bad = MagicMock()
+    bad.status_code = 503
+    bad.raise_for_status.side_effect = Exception("503")
+    with patch("requests.request", return_value=bad) as mock_request:
+        with pytest.raises(Exception):
+            client._request_with_retry("GET", "/health")
+        assert mock_request.call_count >= 1
 
 
 if __name__ == "__main__":

@@ -39,6 +39,33 @@ class _ACLAnthologyHTTPClient:
         response.raise_for_status()
         return response.json()
 
+    def _request_with_retry(
+        self,
+        method: str,
+        path: str,
+        **kwargs,
+    ):
+        import requests
+        import time
+
+        url = f"{self.base_url}{path}"
+        kwargs.setdefault("timeout", self.timeout)
+
+        delay = 1.0
+        total_wait = 0.0
+        while True:
+            response = requests.request(method, url, **kwargs)
+            if response.status_code == 503:
+                logger.debug("Got 503 from %s, retrying after %.1fs", url, delay)
+                time.sleep(delay)
+                total_wait += delay
+                delay *= 2
+                if total_wait >= self.max_retry_wait:
+                    response.raise_for_status()
+                continue
+            response.raise_for_status()
+            return response
+
 
 try:
     from acl_anthology import Anthology
