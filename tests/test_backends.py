@@ -90,20 +90,21 @@ class TestACLAnthologyBackend(unittest.TestCase):
     def test_acl_backend_inherits_base(self):
         """Test that ACLAnthologyBackend inherits from BaseBackend."""
         with patch("paperscout.backends.acl_anthology.ACL_ANTHOLOGY_AVAILABLE", True):
-            with patch("paperscout.backends.acl_anthology.ACLAnthologyBackend.__init__", return_value=None):
-                from paperscout.backends.acl_anthology import ACLAnthologyBackend
+            from paperscout.backends.acl_anthology import ACLAnthologyBackend
+            with patch.object(ACLAnthologyBackend, "__init__", return_value=None):
                 backend = ACLAnthologyBackend()
-                backend.client = None  # Mock client
+                backend._http_client = None
+                backend._local_backend = None
                 self.assertIsInstance(backend, BaseBackend)
 
     def test_acl_backend_search_method_exists(self):
         """Test that ACLAnthologyBackend has a search method."""
         with patch("paperscout.backends.acl_anthology.ACL_ANTHOLOGY_AVAILABLE", True):
-            with patch("paperscout.backends.acl_anthology.ACLAnthologyBackend.__init__", return_value=None):
-                from paperscout.backends.acl_anthology import ACLAnthologyBackend
+            from paperscout.backends.acl_anthology import ACLAnthologyBackend
+            with patch.object(ACLAnthologyBackend, "__init__", return_value=None):
                 backend = ACLAnthologyBackend()
-                self.assertTrue(hasattr(backend, 'search'))
-                self.assertTrue(callable(getattr(backend, 'search')))
+                self.assertTrue(hasattr(backend, "search"))
+                self.assertTrue(callable(getattr(backend, "search")))
 
 
 def test_http_client_base_url_defaults_to_hf_space():
