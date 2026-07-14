@@ -127,6 +127,30 @@ class _ACLAnthologyHTTPClient:
         results.sort(key=lambda p: p.similarity or 0, reverse=True)
         return results[:limit]
 
+    def get_paper(self, paper_id: str) -> Optional[Paper]:
+        try:
+            response = self._request_with_retry("GET", f"/paper/{paper_id}")
+        except Exception:
+            return None
+        return self._paper_from_api(response.json())
+
+    def download_pdf(self, pdf_url: str, save_dir: Path) -> Tuple[str, str]:
+        import requests
+        response = requests.get(pdf_url, timeout=self.timeout)
+        response.raise_for_status()
+
+        # Derive filename from URL path; fall back to 'paper.pdf'
+        from urllib.parse import urlparse
+        parsed = urlparse(pdf_url)
+        filename = Path(parsed.path).name or "paper.pdf"
+        if not filename.endswith(".pdf"):
+            filename += ".pdf"
+
+        save_dir.mkdir(parents=True, exist_ok=True)
+        path = save_dir / filename
+        path.write_bytes(response.content)
+        return str(path), filename
+
 
 try:
     from acl_anthology import Anthology

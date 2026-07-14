@@ -1,6 +1,7 @@
 """Tests for the backend architecture."""
 
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -319,6 +320,52 @@ def test_search_truncates_to_limit():
     with patch.object(client, "_request_with_retry", side_effect=[similarity_response, keyword_response]):
         results = client.search("query", limit=5)
         assert len(results) == 5
+
+
+def test_get_paper_returns_paper():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "id": "N18-3011",
+        "title": "Attention Is All You Need",
+        "authors": "",
+        "venue": "",
+        "year": 2017,
+        "url": "https://aclanthology.org/N18-3011/",
+        "bibtex": "",
+        "pdf_url": "https://aclanthology.org/N18-3011.pdf",
+    }
+    with patch.object(client, "_request_with_retry", return_value=mock_response):
+        paper = client.get_paper("N18-3011")
+        assert paper.identifier == "N18-3011"
+        client._request_with_retry.assert_called_once_with("GET", "/paper/N18-3011")
+
+
+def test_get_paper_returns_none_on_404():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    with patch.object(client, "_request_with_retry", side_effect=Exception("404")):
+        paper = client.get_paper("missing")
+        assert paper is None
+
+
+def test_download_pdf_writes_file(tmp_path):
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    pdf_url = "https://example.com/paper.pdf"
+    save_path = tmp_path / "downloads"
+    save_path.mkdir()
+
+    mock_response = MagicMock()
+    mock_response.content = b"pdf bytes"
+    mock_response.headers = {"content-type": "application/pdf"}
+
+    with patch("requests.get", return_value=mock_response) as mock_get:
+        path, filename = client.download_pdf(pdf_url, save_path)
+        assert Path(path).exists()
+        assert Path(path).read_bytes() == b"pdf bytes"
+        mock_get.assert_called_once_with(pdf_url, timeout=client.timeout)
 
 
 if __name__ == "__main__":
