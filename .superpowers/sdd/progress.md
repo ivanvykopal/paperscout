@@ -69,7 +69,7 @@
 
 ## Task 11: Final verification and code cleanup
 - Status: complete
-- Commits: f2535f4..aaa3b5a
+- Commits: f2535f4..HEAD
 - Review: clean / approved
 - Minor findings resolved:
   - Moved `requests`, `time`, and `urlparse` imports to module level.
