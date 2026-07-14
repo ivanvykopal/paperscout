@@ -276,5 +276,50 @@ def test_search_keyword_calls_api_and_maps_results():
         )
 
 
+def test_search_merges_similarity_and_keyword_results():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+
+    similarity_response = MagicMock()
+    similarity_response.json.return_value = [
+        {"id": "A", "title": "A", "authors": "", "venue": "", "year": None, "url": "", "bibtex": "", "pdf_url": "", "score": 0.9},
+        {"id": "B", "title": "B", "authors": "", "venue": "", "year": None, "url": "", "bibtex": "", "pdf_url": "", "score": 0.8},
+    ]
+    keyword_response = MagicMock()
+    keyword_response.json.return_value = [
+        {"id": "B", "title": "B", "authors": "", "venue": "", "year": None, "url": "", "bibtex": "", "pdf_url": ""},
+        {"id": "C", "title": "C", "authors": "", "venue": "", "year": None, "url": "", "bibtex": "", "pdf_url": ""},
+    ]
+
+    def fake_request(method, path, **kwargs):
+        if path == "/search/similarity":
+            return similarity_response
+        return keyword_response
+
+    with patch.object(client, "_request_with_retry", side_effect=fake_request):
+        results = client.search("query", limit=10)
+        ids = [p.identifier for p in results]
+        assert ids == ["A", "B", "C"]
+        b = [p for p in results if p.identifier == "B"][0]
+        assert b.similarity == 0.8  # higher similarity wins
+
+
+def test_search_truncates_to_limit():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+
+    similarity_response = MagicMock()
+    similarity_response.json.return_value = [
+        {"id": str(i), "title": str(i), "authors": "", "venue": "", "year": None, "url": "", "bibtex": "", "pdf_url": "", "score": 0.5}
+        for i in range(10)
+    ]
+    keyword_response = MagicMock()
+    keyword_response.json.return_value = []
+
+    with patch.object(client, "_request_with_retry", side_effect=[similarity_response, keyword_response]):
+        results = client.search("query", limit=5)
+        assert len(results) == 5
+
+
 if __name__ == "__main__":
     unittest.main()

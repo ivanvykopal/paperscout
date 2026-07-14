@@ -113,6 +113,20 @@ class _ACLAnthologyHTTPClient:
         data = response.json()
         return [self._paper_from_api(item) for item in data]
 
+    def search(self, query: str, limit: int = 10) -> List[Paper]:
+        similarity_results = self.search_similarity(query, k=limit)
+        keyword_results = self.search_keyword(query, limit=limit)
+
+        merged: Dict[str, Paper] = {}
+        for paper in similarity_results + keyword_results:
+            existing = merged.get(paper.identifier)
+            if existing is None or (paper.similarity or 0) > (existing.similarity or 0):
+                merged[paper.identifier] = paper
+
+        results = list(merged.values())
+        results.sort(key=lambda p: p.similarity or 0, reverse=True)
+        return results[:limit]
+
 
 try:
     from acl_anthology import Anthology
