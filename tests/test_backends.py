@@ -170,5 +170,55 @@ def test_request_with_retry_gives_up_after_max_wait():
         assert mock_request.call_count >= 1
 
 
+def test_paper_from_api_maps_all_fields():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    from paperscout.types import Paper
+    client = _ACLAnthologyHTTPClient()
+    data = {
+        "id": "N18-3011",
+        "title": "Attention Is All You Need",
+        "abstract": "We propose a new simple network architecture.",
+        "authors": "Ashish Vaswani, Noam Shazeer",
+        "venue": "NLP",
+        "year": 2017,
+        "url": "https://aclanthology.org/N18-3011/",
+        "bibtex": "@inproceedings{...}",
+        "pdf_url": "https://aclanthology.org/N18-3011.pdf",
+    }
+    paper = client._paper_from_api(data, similarity=0.95)
+    assert isinstance(paper, Paper)
+    assert paper.identifier == "N18-3011"
+    assert paper.title == "Attention Is All You Need"
+    assert paper.authors == ["Ashish Vaswani", "Noam Shazeer"]
+    assert paper.year == 2017
+    assert paper.abstract == "We propose a new simple network architecture."
+    assert paper.categories == ["NLP"]
+    assert paper.url == "https://aclanthology.org/N18-3011/"
+    assert paper.pdf_url == "https://aclanthology.org/N18-3011.pdf"
+    assert paper.similarity == 0.95
+    assert paper.source == "acl_anthology"
+
+
+def test_paper_from_api_handles_null_year_and_empty_fields():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    data = {
+        "id": "1993.tc-1.6",
+        "title": "Terminology and the computer",
+        "abstract": "",
+        "authors": "",
+        "venue": "",
+        "year": None,
+        "url": "https://aclanthology.org/1993.tc-1.6/",
+        "bibtex": "",
+        "pdf_url": "",
+    }
+    paper = client._paper_from_api(data)
+    assert paper.year is None
+    assert paper.authors == []
+    assert paper.categories == []
+    assert paper.pdf_url == ""
+
+
 if __name__ == "__main__":
     unittest.main()

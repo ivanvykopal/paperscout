@@ -66,6 +66,35 @@ class _ACLAnthologyHTTPClient:
             response.raise_for_status()
             return response
 
+    def _paper_from_api(
+        self,
+        data: dict,
+        similarity: Optional[float] = None,
+    ) -> Paper:
+        authors_raw = data.get("authors", "") or ""
+        authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
+
+        venue = data.get("venue", "") or ""
+        categories = [venue] if venue else []
+
+        year = data.get("year")
+        if year is not None:
+            year = int(year)
+
+        return Paper(
+            title=(data.get("title", "") or "").strip(),
+            authors=authors,
+            year=year,
+            abstract=(data.get("abstract", "") or "").strip(),
+            source="acl_anthology",
+            identifier=(data.get("id", "") or "").strip(),
+            url=(data.get("url", "") or "").strip(),
+            pdf_url=(data.get("pdf_url", "") or "").strip(),
+            published="",
+            categories=categories,
+            similarity=similarity,
+        )
+
 
 try:
     from acl_anthology import Anthology
