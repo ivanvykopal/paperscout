@@ -95,6 +95,24 @@ class _ACLAnthologyHTTPClient:
             similarity=similarity,
         )
 
+    def search_similarity(self, query: str, k: int = 10) -> List[Paper]:
+        response = self._request_with_retry(
+            "GET",
+            "/search/similarity",
+            params={"q": query, "k": k},
+        )
+        data = response.json()
+        return [self._paper_from_api(item, similarity=item.get("score")) for item in data]
+
+    def search_keyword(self, query: str, limit: int = 10) -> List[Paper]:
+        response = self._request_with_retry(
+            "GET",
+            "/search/keyword",
+            params={"q": query, "limit": limit},
+        )
+        data = response.json()
+        return [self._paper_from_api(item) for item in data]
+
 
 try:
     from acl_anthology import Anthology

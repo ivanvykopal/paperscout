@@ -220,5 +220,61 @@ def test_paper_from_api_handles_null_year_and_empty_fields():
     assert paper.pdf_url == ""
 
 
+def test_search_similarity_calls_api_and_maps_results():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {
+            "id": "N18-3011",
+            "title": "Attention Is All You Need",
+            "abstract": "",
+            "authors": "",
+            "venue": "",
+            "year": 2017,
+            "url": "https://aclanthology.org/N18-3011/",
+            "bibtex": "",
+            "pdf_url": "",
+            "score": 0.8123,
+        }
+    ]
+    with patch.object(client, "_request_with_retry", return_value=mock_response):
+        results = client.search_similarity("attention", k=5)
+        assert len(results) == 1
+        assert results[0].identifier == "N18-3011"
+        assert results[0].similarity == 0.8123
+        client._request_with_retry.assert_called_once_with(
+            "GET", "/search/similarity", params={"q": "attention", "k": 5}
+        )
+
+
+def test_search_keyword_calls_api_and_maps_results():
+    from paperscout.backends.acl_anthology import _ACLAnthologyHTTPClient
+    client = _ACLAnthologyHTTPClient()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {
+            "id": "N18-3011",
+            "title": "Attention Is All You Need",
+            "abstract": "",
+            "authors": "",
+            "venue": "",
+            "year": 2017,
+            "url": "https://aclanthology.org/N18-3011/",
+            "bibtex": "",
+            "pdf_url": "",
+        }
+    ]
+    with patch.object(client, "_request_with_retry", return_value=mock_response):
+        results = client.search_keyword("attention", limit=5)
+        assert len(results) == 1
+        assert results[0].identifier == "N18-3011"
+        client._request_with_retry.assert_called_once_with(
+            "GET", "/search/keyword", params={"q": "attention", "limit": 5}
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
