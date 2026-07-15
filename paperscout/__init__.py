@@ -15,7 +15,7 @@ from paperscout.backends.acl_anthology import ACLAnthologyBackend
 from paperscout.types import Paper
 from paperscout.bibtex import BibtexVerifier, VerificationResult
 
-__version__ = "0.1.2"
+__version__ = "0.3.0"
 __author__ = "Ivan Vykopal"
 __author_email__ = "ivan.vykopal@gmail.com"
 
