@@ -58,6 +58,16 @@ class BaseBackend(ABC):
         """
         ...
 
+    def lookup(self, identifier: str) -> Optional[Paper]:
+        """
+        Fetch a single paper by its identifier (DOI, arXiv ID, ...).
+
+        Returns:
+            The Paper, or None if the identifier does not exist.
+            Network/service failures must raise, never return None.
+        """
+        raise NotImplementedError(f"{self.name} does not support identifier lookup")
+
     def validate_source(self, source: str) -> bool:
         """
         Check if the source is supported by this backend.

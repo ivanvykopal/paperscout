@@ -199,6 +199,7 @@ print(similarity)  # 1.0 for exact match
 | `dblp` | DblpBackend | Computer science bibliography |
 | `semantic_scholar` | SemanticScholarBackend | Academic paper search |
 | `acl_anthology` | ACLAnthologyBackend | ACL/EMNLP/NAACL papers |
+| `crossref` | CrossrefBackend | DOI-registered journals and proceedings; DOI resolution via doi.org |
 
 ## BibTeX Support
 
@@ -221,38 +222,60 @@ bibtex = paper.to_bibtex()
 bibtex = paper.to_bibtex(entry_key="vaswani2017")
 ```
 
-### Verify BibTeX Files
+### Verify References (hallucination check)
 
-Verify that papers in a BibTeX file actually exist in academic databases:
+`verify` (BibTeX) and `verify-markdown` (References section of a markdown paper)
+ground every reference **field by field** against Crossref, DBLP, Semantic Scholar,
+arXiv and the ACL Anthology:
+
+| Field | Check |
+|-------|-------|
+| title | word-level diff against the record ("Few-Shot" → "Zero-Shot" is caught; casing, punctuation, plurals, omitted subtitle are not errors) |
+| authors | both directions: invented authors, omitted authors (unless `and others`/`et al.`), wrong first author, order; diacritics, LaTeX accents, particles and "Last, First" handled |
+| year | against every version of the work (arXiv vs. proceedings); off by one → review |
+| venue | canonical venues (NeurIPS = NIPS, CoRR = arXiv; Findings ≠ main conference) |
+| doi / arXiv ID | resolved directly; must exist and point to the cited paper |
+
+Verdicts (the worst field decides):
+
+| Verdict | Meaning |
+|---------|---------|
+| 🟢 `verified` | every cited field matches a published record |
+| 🟡 `review` | record found; minor differences (off-by-one year, venue not confirmable, spelling) |
+| 🟠 `mismatch` | record found but a field is wrong — likely hallucinated metadata |
+| 🔴 `not_found` | no source knows this title — likely hallucinated reference |
+| ⚪ `unverifiable` | a source failed or the entry has no title; nothing concluded, rerun |
+
+A failing source never turns into `not_found`: if any source errored and no match was
+found elsewhere, the verdict is `unverifiable`. The exit code is `1` when any
+reference is `mismatch` or `not_found` (usable in CI), `2` when the input has no references.
 
 ```bash
-# Basic verification
 paperscout verify references.bib
-
-# With specific backends
-paperscout verify references.bib --source arxiv,dblp
-
-# Enrich entries with discovered metadata
-paperscout verify references.bib --enrich
-
-# Output annotated .bib and JSON report
-paperscout verify references.bib --output verified.bib --json report.json
+paperscout verify references.bib --report report.txt --json report.json
+# annotated copy; --enrich adds missing doi/url to verified/review entries only
+paperscout verify references.bib -o annotated.bib --enrich
+# restrict sources (e.g. when one is down)
+paperscout verify references.bib --source crossref,semantic_scholar,arxiv
+paperscout verify-markdown paper.md --report report.txt
 ```
+
+Lookups are cached for 30 days in `~/.cache/paperscout/grounding.sqlite`
+(override with `PAPERSCOUT_CACHE_DIR`, bypass with `--no-cache`). Set `S2_API_KEY`
+for Semantic Scholar rate limits and `PAPERSCOUT_MAILTO` for the Crossref polite pool;
+with an API key you can raise `--workers`.
 
 ```python
 from paperscout import PaperFinderClient
 
-client = PaperFinderClient()
-results = client.verify_bibtex("references.bib")
-
-for result in results:
-    print(f"{result.bib_key}: {result.verdict} ({result.confidence:.0%})")
+for r in PaperFinderClient().verify_bibtex("references.bib"):
+    print(r.reference.key, r.verdict, r.issues)
 ```
 
-The verifier outputs:
-- **Console report**: Rich table showing verification status for each entry
-- **Annotated .bib**: Original file with verification comments
-- **JSON report**: Structured data for downstream processing
+Limitations: a `verified` verdict means the cited metadata matches a real record; it
+does not check that the paper supports the claim it is cited for. Works absent from
+all sources (books, reports, blogs, very new papers) come out `not_found` and need a
+manual look.
 
 ## CLI Output
 

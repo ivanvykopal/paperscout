@@ -2,12 +2,13 @@
 ArXiv backend using the arxivy library.
 """
 
+import re
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from paperscout.backends.base import BaseBackend
-from arxivy.api.client import ArxivClient
+from arxivy.api.client import ArxivClient, NotFoundError
 from paperscout.types import Paper
 
 try:
@@ -116,6 +117,16 @@ class ArxivBackend(BaseBackend):
             "authors": paper.authors,
         }
 
+    def lookup(self, identifier: str) -> Optional[Paper]:
+        """Fetch a paper by arXiv ID. Returns None if the ID does not exist; raises on network errors."""
+        arxiv_id = re.sub(r"^arxiv:\s*", "", identifier.strip(), flags=re.IGNORECASE)
+        arxiv_id = re.sub(r"v\d+$", "", arxiv_id)
+        try:
+            result = self.client.get_paper(arxiv_id)
+        except NotFoundError:
+            return None
+        return self._format_result(result) if result else None
+
     def _format_result(self, result: Any) -> Paper:
         """
         Format arxivy result to standard format.
@@ -138,6 +149,8 @@ class ArxivBackend(BaseBackend):
             published=result.published,
             categories=result.categories if hasattr(result, 'categories') else [],
             similarity=None,
+            venue="arXiv",
+            doi=getattr(result, "doi", None) or None,
         )
     
     def _download_file(self, url: str, identifier: str, save_dir: Optional[Path] = None) -> Tuple[str, str]:

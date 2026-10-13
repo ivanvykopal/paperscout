@@ -101,47 +101,38 @@ class PaperFinderClient:
         self,
         path: str,
         sources: list[str] | None = None,
-        enrich: bool = False,
-        threshold: float = 0.5,
-        parallel: bool = False,
+        workers: int = 1,
+        use_cache: bool = True,
     ) -> list:
         """
-        Verify BibTeX entries in a file.
+        Ground every entry of a .bib file field by field.
 
         Args:
             path: Path to .bib file.
-            sources: Specific backends to use.
-            enrich: Whether to enrich entries.
-            threshold: Confidence threshold.
-            parallel: Whether to run in parallel.
+            sources: Sources to query (default: all grounding sources).
+            workers: Number of references verified concurrently.
+            use_cache: Reuse cached lookups from earlier runs.
 
         Returns:
-            List of VerificationResult objects.
+            List of GroundingResult objects.
         """
         from paperscout.bibtex import BibtexVerifier
 
-        verifier = BibtexVerifier(threshold=threshold)
-        return verifier.verify_file(path, sources=sources, enrich=enrich, parallel=parallel)
+        return BibtexVerifier(sources=sources, use_cache=use_cache).verify_file(path, workers=workers)
 
     def verify_markdown_references(
         self,
         path: str,
         sources: list[str] | None = None,
-        threshold: float = 0.5,
+        workers: int = 1,
+        use_cache: bool = True,
     ) -> list:
         """
-        Verify references extracted from a markdown file.
-
-        Args:
-            path: Path to .md file with References section.
-            sources: Specific backends to use.
-            threshold: Confidence threshold.
+        Ground references from the References section of a markdown file.
 
         Returns:
-            List of ReferenceVerificationResult objects.
+            List of GroundingResult objects.
         """
         from paperscout.markdown_refs import MarkdownRefParser
 
-        parser = MarkdownRefParser()
-        # Note: threshold is currently used internally by the parser via BibtexVerifier
-        return parser.verify_file(path, sources=sources)
+        return MarkdownRefParser(sources=sources, use_cache=use_cache).verify_file(path, workers=workers)

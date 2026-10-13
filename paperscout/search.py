@@ -6,6 +6,7 @@ from typing import Dict, List
 
 from paperscout.backends.arxiv import ArxivBackend
 from paperscout.backends.base import BaseBackend
+from paperscout.backends.crossref import CrossrefBackend
 from paperscout.backends.dblp import DblpBackend
 from paperscout.backends.s2cli import SemanticScholarBackend
 from paperscout.backends.acl_anthology import ACLAnthologyBackend
@@ -63,6 +64,7 @@ class PaperSearcher:
         "arxiv": ArxivBackend,
         "dblp": DblpBackend,
         "semantic_scholar": SemanticScholarBackend,
+        "crossref": CrossrefBackend,
     }
 
     def __init__(self):

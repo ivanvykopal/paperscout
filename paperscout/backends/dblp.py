@@ -3,6 +3,7 @@ DBLP backend using the dblpcli library.
 """
 
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -58,10 +59,15 @@ class DblpBackend(BaseBackend):
         Returns:
             List of Paper objects.
         """
-        results = self.client.search_publications(
-            query=query,
-            limit=limit
-        )
+        try:
+            results = self.client.search_publications(
+                query=query,
+                limit=limit
+            )
+        except ET.ParseError as e:
+            raise RuntimeError(
+                "DBLP returned a non-XML page (bot challenge or rate limit); results unavailable"
+            ) from e
 
         # Capture the total result count from the API metadata
         self._last_total = results.get("meta", {}).get("total", 0)
@@ -124,6 +130,8 @@ class DblpBackend(BaseBackend):
             published=result.get("published", ""),
             categories=result.get("categories", []),
             similarity=None,
+            venue=result.get("venue") or None,
+            doi=result.get("doi") or None,
         )
     
     def _download_file(self, url: str, identifier: str, save_dir: Optional[Path] = None) -> Tuple[str, str]:

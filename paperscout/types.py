@@ -85,6 +85,8 @@ class Paper:
         published: Publication date as string (optional).
         categories: List of categories or tags (optional).
         similarity: Relevance score calculated during search (optional).
+        venue: Publication venue as reported by the source (optional).
+        doi: DOI of the publication, if the source provides one (optional).
     """
 
     title: str
@@ -98,6 +100,8 @@ class Paper:
     published: Optional[str]
     categories: List[str]
     similarity: Optional[float] = None
+    venue: Optional[str] = None
+    doi: Optional[str] = None
 
     def to_dict(self) -> dict:
         """Convert Paper to a dictionary."""
@@ -113,6 +117,8 @@ class Paper:
             "published": self.published,
             "categories": self.categories,
             "similarity": self.similarity,
+            "venue": self.venue,
+            "doi": self.doi,
         }
 
     @classmethod
@@ -138,6 +144,8 @@ class Paper:
             published=data.get("published"),
             categories=data.get("categories", []),
             similarity=data.get("similarity"),
+            venue=data.get("venue"),
+            doi=data.get("doi"),
         )
 
     def to_bibtex(self, entry_key: str | None = None, entry_type: str | None = None) -> str:
@@ -169,6 +177,8 @@ class Paper:
         # Add optional fields
         if self.identifier and self.source == "arxiv":
             fields["eprint"] = self.identifier
+        if self.doi:
+            fields["doi"] = self.doi
         if self.url:
             fields["url"] = self.url
         if self.abstract:

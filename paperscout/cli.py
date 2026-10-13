@@ -32,7 +32,7 @@ def main():
     match_parser.add_argument(
         "-s",
         "--source",
-        choices=["all", "arxiv", "dblp", "semantic_scholar", "acl_anthology"],
+        choices=["all", "arxiv", "dblp", "semantic_scholar", "acl_anthology", "crossref"],
         default="all",
         help="Source to search (default: all - searches all backends)",
     )
@@ -64,7 +64,7 @@ def main():
     search_parser.add_argument(
         "-s",
         "--source",
-        choices=["all", "arxiv", "dblp", "semantic_scholar", "acl_anthology"],
+        choices=["all", "arxiv", "dblp", "semantic_scholar", "acl_anthology", "crossref"],
         default="all",
         help="Source to search (default: all - searches all backends)",
     )
@@ -134,72 +134,36 @@ def main():
         help="Output results as JSON",
     )
 
-    # Verify command - BibTeX
-    verify_parser = subparsers.add_parser("verify", help="Verify BibTeX entries")
-    verify_parser.add_argument(
-        "file",
-        help="Path to .bib file to verify",
+    # Verify commands - ground references field by field
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Ground BibTeX entries (title, authors, year, venue, DOI, arXiv ID)",
     )
-    verify_parser.add_argument(
-        "-s", "--source",
-        dest="sources",
-        help="Backends to use (comma-separated: arxiv,dblp,etc.)",
-    )
+    verify_parser.add_argument("file", help="Path to .bib file to verify")
     verify_parser.add_argument(
         "--enrich",
         action="store_true",
-        help="Fill in missing fields from discovered metadata",
-    )
-    verify_parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.5,
-        help="Confidence threshold for suspicious (default: 0.5)",
-    )
-    verify_parser.add_argument(
-        "--parallel",
-        action="store_true",
-        help="Enable parallel backend queries",
+        help="With -o: add missing doi/url to verified/review entries",
     )
     verify_parser.add_argument(
         "-o", "--output",
-        help="Write annotated .bib to this path",
+        help="Write annotated .bib (verdict and issues as comments) to this path",
     )
-    verify_parser.add_argument(
-        "-j", "--json",
-        dest="json_output",
-        help="Write JSON report to this path",
-    )
+    _add_verify_arguments(verify_parser)
 
-    # Verify-markdown command - verify references from markdown files
     verify_md_parser = subparsers.add_parser(
         "verify-markdown",
-        help="Verify references from markdown file (References section)"
+        help="Ground references from a markdown file (References section)",
     )
     verify_md_parser.add_argument(
         "file",
         help="Path to markdown file (.md) with References section",
     )
     verify_md_parser.add_argument(
-        "-s", "--source",
-        dest="sources",
-        help="Backends to use (comma-separated: arxiv,dblp,etc.)",
-    )
-    verify_md_parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.5,
-        help="Confidence threshold for suspicious (default: 0.5)",
-    )
-    verify_md_parser.add_argument(
         "-o", "--output",
-        help="Write verification report to this path",
+        help="Write plain-text report to this path (same as --report)",
     )
-    verify_md_parser.add_argument(
-        "-j", "--json",
-        dest="json_output",
-        help="Write JSON report to this path",
-    )
+    _add_verify_arguments(verify_md_parser)
 
     args = parser.parse_args()
 
@@ -259,76 +223,71 @@ def main():
                 f"[red]✗ Download failed: {result.get('message', 'Unknown error')}[/red]"
             )
 
-    elif args.command == "verify":
-        client = PaperFinderClient()
+    elif args.command in ("verify", "verify-markdown"):
+        from paperscout import report
 
-        sources = args.sources.split(",") if args.sources else None
-        results = client.verify_bibtex(
-            args.file,
-            sources=sources,
-            enrich=args.enrich,
-            threshold=args.threshold,
-            parallel=args.parallel,
-        )
+        sources = [s.strip() for s in args.sources.split(",")] if args.sources else None
+        try:
+            if args.command == "verify":
+                from paperscout.bibtex import BibtexVerifier
 
-        # Print console report
-        from paperscout.bibtex import BibtexVerifier
-        verifier = BibtexVerifier()
-        console.print(verifier._format_verification_report(results))
+                verifier = BibtexVerifier(sources=sources, use_cache=not args.no_cache)
+                results = verifier.verify_file(args.file, workers=args.workers)
+            else:
+                from paperscout.markdown_refs import MarkdownRefParser
 
-        # Write annotated .bib if requested
-        if args.output:
-            verifier._write_annotated_bibtex(args.file, args.output, results, enrich=args.enrich)
+                md_parser = MarkdownRefParser(sources=sources, use_cache=not args.no_cache)
+                results = md_parser.verify_file(args.file, workers=args.workers)
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            sys.exit(2)
+
+        if not results:
+            console.print("[yellow]No references found in the input.[/yellow]")
+            sys.exit(2)
+
+        console.print(report.rich_table(results))
+
+        text_path = args.report or (args.output if args.command == "verify-markdown" else None)
+        if text_path:
+            with open(text_path, "w", encoding="utf-8") as f:
+                f.write(report.text_report(results))
+            console.print(f"[green]Report written to {text_path}[/green]")
+        if args.command == "verify" and args.output:
+            verifier.write_annotated_bibtex(args.file, args.output, results, enrich=args.enrich)
             console.print(f"[green]Annotated BibTeX written to {args.output}[/green]")
-
-        # Write JSON report if requested
         if args.json_output:
-            verifier.generate_json_report(args.json_output, results)
+            report.write_json(args.json_output, results)
             console.print(f"[green]JSON report written to {args.json_output}[/green]")
 
-    elif args.command == "verify-markdown":
-        from paperscout.markdown_refs import MarkdownRefParser
+        if any(r.verdict in ("mismatch", "not_found") for r in results):
+            sys.exit(1)
 
-        parser = MarkdownRefParser()
-        sources = args.sources.split(",") if args.sources else None
-        results = parser.verify_file(
-            args.file,
-            sources=sources,
-        )
 
-        # Print console report
-        console.print(parser._format_verification_report(results))
-
-        # Write report if requested
-        if args.output:
-            report = parser.format_report(results)
-            with open(args.output, "w", encoding="utf-8") as f:
-                f.write(report)
-            console.print(f"[green]Verification report written to {args.output}[/green]")
-
-        # Write JSON report if requested
-        if args.json_output:
-            # Convert results to JSON-serializable format
-            import json
-            report_data = []
-            for r in results:
-                entry = {
-                    "citation_text": r.citation_text,
-                    "extracted_title": r.extracted_title,
-                    "extracted_authors": r.extracted_authors,
-                    "extracted_year": r.extracted_year,
-                    "verdict": r.verdict,
-                    "confidence": round(r.confidence, 3),
-                    "matched_paper": r.matched_paper.to_dict() if r.matched_paper else None,
-                    "backend_used": r.backend_used,
-                    "discrepancies": r.discrepancies,
-                    "error": r.error,
-                }
-                report_data.append(entry)
-
-            with open(args.json_output, "w", encoding="utf-8") as f:
-                json.dump(report_data, f, indent=2, ensure_ascii=False)
-            console.print(f"[green]JSON report written to {args.json_output}[/green]")
+def _add_verify_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "-s", "--source",
+        dest="sources",
+        help="Sources to query, comma-separated "
+             "(default: crossref,dblp,semantic_scholar,arxiv,acl_anthology)",
+    )
+    parser.add_argument(
+        "-j", "--json",
+        dest="json_output",
+        help="Write JSON report (per-field checks) to this path",
+    )
+    parser.add_argument("--report", help="Write plain-text report to this path")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="References verified concurrently (default: 1; raise only with an S2_API_KEY)",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Ignore the on-disk lookup cache (~/.cache/paperscout, 30-day TTL)",
+    )
 
 
 def output_results(

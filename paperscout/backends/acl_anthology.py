@@ -7,6 +7,7 @@ papers, covering venues like ACL, EMNLP, NAACL, and more.
 
 import logging
 import os
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -23,6 +24,38 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_ACL_API_URL = "https://ivykopal-acl-api.hf.space"
+
+# Old-style Anthology ID prefixes (e.g. "N19-1423") mapped to venue names.
+_OLD_ACL_PREFIXES = {
+    "P": "ACL",
+    "D": "EMNLP",
+    "N": "NAACL",
+    "E": "EACL",
+    "Q": "TACL",
+    "J": "Computational Linguistics",
+    "C": "COLING",
+    "K": "CoNLL",
+    "L": "LREC",
+    "S": "SemEval",
+    "W": "Workshop",
+}
+
+
+def _venue_from_acl_id(paper_id: str, fallback: str = "") -> str:
+    """Derive a venue name from an ACL Anthology ID.
+
+    New-style IDs encode the volume ("2024.findings-naacl.294" -> "findings-naacl"),
+    old-style IDs encode it in the letter prefix ("N19-1423" -> "NAACL").
+    The API's own venue field is often only "Findings", which loses the conference.
+    """
+    match = re.match(r"^\d{4}\.([a-z0-9\-]+)\.\d+$", paper_id or "")
+    if match:
+        return match.group(1)
+    match = re.match(r"^([A-Z])\d{2}-\d{4}$", paper_id or "")
+    if match and match.group(1) in _OLD_ACL_PREFIXES:
+        return _OLD_ACL_PREFIXES[match.group(1)]
+    return fallback
+
 
 
 class _ACLAnthologyHTTPClient:
@@ -75,6 +108,7 @@ class _ACLAnthologyHTTPClient:
         authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
 
         venue = (data.get("venue", "") or "").strip()
+        paper_id = (data.get("id", "") or "").strip()
         categories = [venue] if venue else []
 
         year = data.get("year")
@@ -93,6 +127,7 @@ class _ACLAnthologyHTTPClient:
             published="",
             categories=categories,
             similarity=similarity,
+            venue=_venue_from_acl_id(paper_id, venue) or None,
         )
 
     def search_similarity(self, query: str, k: int = 10) -> List[Paper]:
@@ -318,18 +353,22 @@ class _ACLAnthologyLocalBackend(BaseBackend):
                 return default
             return str(value)
 
+        paper_id = _get_str_attr(paper, 'full_id', '') or _get_str_attr(paper, 'id', '')
+        venue = _get_str_attr(paper, 'venue', '')
         return Paper(
             title=_get_str_attr(paper, 'title', '').strip(),
             authors=self._parse_authors(getattr(paper, 'authors', [])),
             year=int(getattr(paper, 'year', 0)) if getattr(paper, 'year') else None,
             abstract=_get_str_attr(paper, 'abstract', '').strip() if hasattr(paper, 'abstract') else "",
             source="acl_anthology",
-            identifier=_get_str_attr(paper, 'id', ''),
+            identifier=paper_id,
             url=_get_str_attr(paper, 'web_url', ''),
             pdf_url=self._parse_pdf_url(paper),
             published=_get_str_attr(paper, 'ingest_date', ''),
-            categories=[_get_str_attr(paper, 'venue', '')] if getattr(paper, 'venue', '') else [],
+            categories=[venue] if venue else [],
             similarity=similarity if similarity > 0 else None,
+            venue=_venue_from_acl_id(paper_id, venue) or None,
+            doi=_get_str_attr(paper, 'doi', '') or None,
         )
 
     def _parse_authors(self, authors: Any) -> List[str]:

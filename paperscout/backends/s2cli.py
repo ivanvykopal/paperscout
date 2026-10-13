@@ -150,18 +150,22 @@ class SemanticScholarBackend(BaseBackend):
             else raw_authors
         )
 
+        external_ids = result.get("externalIds") or {}
+        venue = (result.get("venue") or "").strip()
         return Paper(
-            title=result.get("title", "").strip(),
+            title=(result.get("title") or "").strip(),
             authors=authors,
-            year=int(result.get("year", 0)) if result.get("year") else None,
-            abstract=result.get("abstract", "").strip(),
+            year=int(result["year"]) if result.get("year") else None,
+            abstract=(result.get("abstract") or "").strip(),
             source="semantic_scholar",
             identifier=result.get("s2_id", result.get("paperId", "")),
             url=result.get("url", ""),
             pdf_url=result.get("pdf_url", ""),
             published=result.get("published", ""),
-            categories=result.get("venue", result.get("categories", [])),
+            categories=[venue] if venue else [],
             similarity=None,
+            venue=venue or None,
+            doi=external_ids.get("DOI") or None,
         )
     
     def _download_file(self, url: str, identifier: str, save_dir: Optional[Path] = None) -> Tuple[str, str]:
